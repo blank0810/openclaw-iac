@@ -1,0 +1,81 @@
+# SearXNG settings for OpenClaw agents.
+# Minimal config: JSON API only, single-user, no rate limiting.
+# Seeded once by Pyinfra; edit on server to customize.
+
+general:
+  debug: false
+  instance_name: "SearXNG (OpenClaw)"
+  privacypolicy_url: false
+  donation_url: false
+  contact_url: false
+  enable_metrics: false
+
+server:
+  secret_key: "override-me-via-env"
+  bind_address: "0.0.0.0"
+  port: 8080
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+  default_http_headers:
+    X-Content-Type-Options: nosniff
+    X-Robots-Tag: noindex, nofollow
+    Referrer-Policy: no-referrer
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - json
+
+ui:
+  default_theme: simple
+  query_in_title: false
+  center_alignment: false
+
+# Engine selection: Google, Bing, DDG, Startpage, Wikipedia.
+# Brave disabled (scraping adapter unreliable without API key).
+# Engines not listed retain SearXNG defaults (most disabled).
+# Tunable on server post-deploy without redeploying.
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: false
+
+  - name: bing
+    engine: bing
+    shortcut: bi
+    disabled: false
+
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false
+
+  - name: wikidata
+    engine: wikidata
+    shortcut: wd
+    disabled: true
+
+  - name: brave
+    engine: brave
+    shortcut: br
+    disabled: true
+
+  - name: startpage
+    engine: startpage
+    shortcut: sp
+    disabled: false
+
+  - name: qwant
+    engine: qwant
+    shortcut: qw
+    disabled: true
