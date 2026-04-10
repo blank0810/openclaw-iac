@@ -1,22 +1,17 @@
-# Chaos agent compose file.
-# Launch with: cd /opt/openclaw/chaos && docker compose --env-file ../.env up -d
-# Secrets come from /opt/openclaw/.env (shared with Jarvis).
-
 services:
-  chaos:
+  jarvis:
     image: ghcr.io/openclaw/openclaw:2026.4.5
-    container_name: openclaw-chaos
+    container_name: openclaw-jarvis
     init: true
     restart: unless-stopped
-    stop_grace_period: 30s  # extended from default 10s — Composio MCP shutdown RPCs can hang
-    command: ["node", "dist/index.js", "gateway", "--bind", "loopback", "--port", "18791"]
+    command: ["node", "dist/index.js", "gateway", "--bind", "loopback", "--port", "18789"]
     ports:
-      - "127.0.0.1:18791:18791"
-      - "127.0.0.1:18792:18792"
+      - "127.0.0.1:18789:18789"
+      - "127.0.0.1:18790:18790"
     volumes:
-      - ./data:/home/node/.openclaw
+      - ./openclaw_data:/home/node/.openclaw
     environment:
-      - OPENCLAW_GATEWAY_TOKEN=${CHAOS_GATEWAY_TOKEN:?CHAOS_GATEWAY_TOKEN must be set}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:?OPENCLAW_GATEWAY_TOKEN must be set}
       - NODE_OPTIONS=--max-old-space-size=1536
       - TZ=${TZ:-UTC}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
@@ -24,13 +19,13 @@ services:
       - LITELLM_BASE_URL=${LITELLM_BASE_URL:-}
       - LITELLM_API_KEY=${LITELLM_API_KEY:-}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
-      - SLACK_BOT_TOKEN=${CHAOS_SLACK_BOT_TOKEN:-}
-      - SLACK_APP_TOKEN=${CHAOS_SLACK_APP_TOKEN:-}
-      - TELEGRAM_BOT_TOKEN=${CHAOS_TELEGRAM_BOT_TOKEN:-}
-      - DISCORD_BOT_TOKEN=${CHAOS_DISCORD_BOT_TOKEN:-}
-      - DISCORD_SERVER_ID=${CHAOS_DISCORD_SERVER_ID:-}
-      - DISCORD_OWNER_ID=${CHAOS_DISCORD_OWNER_ID:-}
-      - WHATSAPP_OWNER_PHONE=${CHAOS_WHATSAPP_OWNER_PHONE:-}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - DISCORD_SERVER_ID=${DISCORD_SERVER_ID:-}
+      - DISCORD_OWNER_ID=${DISCORD_OWNER_ID:-}
+      - WHATSAPP_OWNER_PHONE=${WHATSAPP_OWNER_PHONE:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - SEARXNG_BASE_URL=http://searxng:8080
     cap_drop:
@@ -43,16 +38,16 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.5"
+          cpus: "2.0"
           memory: 2G
     networks:
-      - chaos_net
+      - openclaw_net
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:18791/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:18789/healthz || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 60s  # bumped from 20s — Chaos drifted state + MCP reconnect can take ~22s
+      start_period: 20s
     logging:
       driver: json-file
       options:
@@ -61,13 +56,13 @@ services:
 
   searxng:
     image: searxng/searxng:latest
-    container_name: chaos-searxng
+    container_name: jarvis-searxng
     init: true
     restart: unless-stopped
     volumes:
       - ./searxng_data:/etc/searxng
     environment:
-      - SEARXNG_SECRET=${SEARXNG_SECRET:-searxng-chaos-secret-change-me}
+      - SEARXNG_SECRET=${SEARXNG_SECRET:-searxng-jarvis-secret-change-me}
     cap_drop:
       - ALL
     security_opt:
@@ -82,7 +77,7 @@ services:
           cpus: "0.5"
           memory: 512M
     networks:
-      - chaos_net
+      - openclaw_net
     healthcheck:
       test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1:8080/healthz || exit 1"]
       interval: 30s
@@ -96,5 +91,5 @@ services:
         max-file: "3"
 
 networks:
-  chaos_net:
+  openclaw_net:
     driver: bridge

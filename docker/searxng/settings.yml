@@ -5,9 +5,9 @@
 general:
   debug: false
   instance_name: "SearXNG (OpenClaw)"
-  privacypolicy_url: false
-  donation_url: false
-  contact_url: false
+  privacypolicy_url: ""
+  donation_url: ""
+  contact_url: ""
   enable_metrics: false
 
 server:
