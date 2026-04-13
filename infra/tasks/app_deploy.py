@@ -191,10 +191,10 @@ files.put(
 )
 
 # --- Chaos SearXNG sidecar ---
-# Directory and settings.yml must be root-owned. SearXNG's container entrypoint
-# runs as root but cap_drop: ALL removes DAC_OVERRIDE, so it cannot write to
-# directories it doesn't own. Matches Jarvis's (accidentally Docker-created)
-# setup which works.
+# Directory must be root-owned. SearXNG's container entrypoint runs as root
+# but cap_drop: ALL removes DAC_OVERRIDE, so it cannot write to directories
+# it doesn't own. On first boot, SearXNG auto-generates settings.yml from
+# its built-in template. Operators tune engines/UI on the server afterward.
 chaos_searxng_dir = f"{chaos_dir}/searxng_data"
 
 files.directory(
@@ -205,20 +205,6 @@ files.directory(
     mode="755",
     _sudo=True,
 )
-
-chaos_searxng_settings = f"{chaos_searxng_dir}/settings.yml"
-chaos_searxng_settings_exists = host.get_fact(File, path=chaos_searxng_settings)
-
-if not chaos_searxng_settings_exists:
-    files.put(
-        name="Seed Chaos SearXNG settings.yml (first deploy only)",
-        src="docker/searxng/settings.yml",
-        dest=chaos_searxng_settings,
-        user="0",
-        group="0",
-        mode="644",
-        _sudo=True,
-    )
 
 # === STEP 10: Sentinel-guarded seed-once ===
 # Only fires when:
