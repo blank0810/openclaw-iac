@@ -483,33 +483,35 @@ networks:
 
 ### Phase 2: OpenClaw Config Update
 
-#### 5.1 How Agents Will Use SearXNG
+> **Correction (2026-04-13):** The earlier draft of this section claimed the bundled `web-search` skill auto-detects `SEARXNG_BASE_URL`. **That was wrong.** No such bundled skill ships with OpenClaw 2026.4.5, and `SEARXNG_BASE_URL` is not read by anything. The actual integration path is the `searxng` plugin (lives at `/app/dist/extensions/searxng/`) configured via `plugins.entries.searxng.config.webSearch.baseUrl` in `openclaw.json`. The `SEARXNG_BASE_URL` env var on the agent containers is harmless but unused; can be removed in a future cleanup.
 
-OpenClaw's bundled `web-search` skill (already in `skills.allowBundled` for both agents) auto-detects the search provider via environment variables. The provider detection order is:
+#### 5.1 How Agents Use SearXNG (correct mechanism)
 
-1. `BRAVE_API_KEY` -> Brave Search
-2. `EXA_API_KEY` -> Exa
-3. `SEARXNG_BASE_URL` -> SearXNG (order ~200, key-free fallback)
+OpenClaw 2026.4.5 ships a native `searxng` extension (`/app/dist/extensions/searxng/openclaw.plugin.json`). The plugin registers as a `webSearch` provider and is opt-in — not enabled by default. To activate it:
 
-By removing `BRAVE_API_KEY` from the compose env and adding `SEARXNG_BASE_URL=http://searxng:8080`, the bundled skill automatically switches to SearXNG. **No skill installation, no custom skill, no ClawHub download required.**
+1. Enable the plugin entry: `plugins.entries.searxng.enabled = true`
+2. Configure the base URL: `plugins.entries.searxng.config.webSearch.baseUrl = "http://searxng:8080"`
 
-#### 5.2 Changes to `openclaw.json` Templates
+The `.config` wrapper is required — confirmed by reading `/app/dist/plugin-web-search-config-*.js`:
 
-**No changes to `docker/openclaw.json` or `docker/chaos/openclaw.json` are required.**
+```js
+const pluginConfig = config?.plugins?.entries?.[pluginId]?.config;
+return isRecord(pluginConfig.webSearch) ? pluginConfig.webSearch : void 0;
+```
 
-The bundled `web-search` skill is already in `skills.allowBundled` for both agents. The `SEARXNG_BASE_URL` env var is all it needs. The `tools.web.search.provider` field in `openclaw.json` is optional -- when omitted, auto-detection kicks in.
+Once enabled, the agent can call SearXNG via the OpenClaw `webSearch` tool. The model still has access to its native search grounding (e.g., Gemini's Google grounding) — it picks based on context. To force SearXNG-only, disable the model provider's grounding feature.
 
-**Optional explicit configuration** (not required, but documents intent):
+#### 5.2 Changes to `openclaw.json` Seed Templates
 
-If we wanted to be explicit rather than relying on auto-detection, we could add the following to both `openclaw.json` templates:
+**`docker/chaos/openclaw.json` is updated** to include the searxng plugin block at the end of the file:
 
 ```json
-{
-  "tools": {
-    "web": {
-      "search": {
-        "provider": "searxng",
-        "searxng": {
+"plugins": {
+  "entries": {
+    "searxng": {
+      "enabled": true,
+      "config": {
+        "webSearch": {
           "baseUrl": "http://searxng:8080"
         }
       }
@@ -518,13 +520,14 @@ If we wanted to be explicit rather than relying on auto-detection, we could add 
 }
 ```
 
-**Recommendation: Do NOT add this.** The env var approach is simpler, and seed-once means we cannot push config changes to live agents anyway. If we wanted to change the provider later, we would have to SSH in and edit the live config or reset it. The env var approach lets us change providers by editing compose files alone.
+This bakes the integration into fresh deploys. Existing live configs (drifted via gateway self-edits) need to be patched manually with the same block, then the container restarted.
 
-#### 5.3 Seed-Once Implications
+#### 5.3 Common config gotchas (verified via failed attempts)
 
-Both agents have drifted live configs (self-managed via the `gateway` tool). Changes to the `openclaw.json` templates in the repo only affect fresh hosts or config resets. Since we are NOT changing the templates, there is no seed-once concern for this phase.
-
-The `SEARXNG_BASE_URL` env var is injected at the container level (compose file), not the config file level, so it takes effect immediately on the next `docker compose up -d` -- no config reset needed.
+- **Wrong path:** `plugins.entries.searxng.webSearch.baseUrl` (without the `.config` wrapper) is rejected: `Unrecognized key: "webSearch"`. Boot fails until removed.
+- **`tools.webSearch` is not a real config path** in OpenClaw 2026.4.5 — `gateway failed: config schema path not found raw_params={"path":"tools.webSearch"}`.
+- **`x_search` is xAI's Twitter/X search tool**, not SearXNG. Removing it from the deny list does nothing for SearXNG and exposes a Grok-API-key-dependent tool.
+- **Agent containers' `web_fetch` tool blocks private IPs** (SSRF guard). The SearXNG plugin uses its own HTTP client and bypasses this — but if you ever try to point `web_fetch` at `http://searxng:8080` directly, it will be rejected as `Blocked hostname or private/internal/special-use IP address`.
 
 ---
 
