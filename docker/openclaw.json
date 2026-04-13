@@ -122,6 +122,18 @@
   "cron": {
     "enabled": true
   },
+  "plugins": {
+    "entries": {
+      "searxng": {
+        "enabled": true,
+        "config": {
+          "webSearch": {
+            "baseUrl": "http://searxng:8080"
+          }
+        }
+      }
+    }
+  },
   "logging": {
     "redactSensitive": "tools",
     "redactPatterns": ["api[_-]?key", "secret", "token", "password"]
