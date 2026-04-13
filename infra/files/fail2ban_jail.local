@@ -1,0 +1,15 @@
+# fail2ban jail overrides
+# Managed by Pyinfra — do not edit manually
+# Uploaded by infra/tasks/hardening.py
+#
+# This file overrides /etc/fail2ban/jail.conf for the [sshd] jail.
+# Port must match Port in infra/files/sshd_config.
+
+[sshd]
+enabled  = true
+port     = 2222
+filter   = sshd
+backend  = systemd
+bantime  = 10m
+findtime = 10m
+maxretry = 5

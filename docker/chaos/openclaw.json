@@ -1,0 +1,129 @@
+{
+  "gateway": {
+    "mode": "local"
+  },
+  "models": {
+    "providers": {
+      "anthropic": {
+        "baseUrl": "https://api.anthropic.com/v1",
+        "apiKey": "${ANTHROPIC_API_KEY}",
+        "api": "anthropic-messages",
+        "models": [
+          { "id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5", "input": ["text", "image"] }
+        ]
+      },
+      "google": {
+        "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+        "apiKey": "${GEMINI_API_KEY}",
+        "api": "google-generative-ai",
+        "models": [
+          { "id": "gemini-3.1-pro-preview", "name": "Gemini 3.1 Pro", "input": ["text", "image"] },
+          { "id": "gemini-3-flash-preview", "name": "Gemini 3 Flash", "input": ["text", "image"] }
+        ]
+      },
+      "litellm": {
+        "baseUrl": "${LITELLM_BASE_URL}",
+        "apiKey": "${LITELLM_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          { "id": "qwen2.5:7b", "name": "Qwen 2.5 7B", "input": ["text"] },
+          { "id": "llama3.1:8b", "name": "LLaMA 3.1 8B", "input": ["text"] },
+          { "id": "gemma4:e4b", "name": "Gemma 4 E4B", "input": ["text"] }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "google/gemini-3.1-pro-preview"
+      },
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "memorySearch": {
+        "enabled": true,
+        "provider": "gemini"
+      },
+      "sandbox": {
+        "mode": "off"
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "identity": {
+          "name": "Chaos",
+          "theme": "A friendly and capable AI assistant",
+          "emoji": "robot_face"
+        }
+      }
+    ]
+  },
+  "tools": {
+    "profile": "full",
+    "allow": ["group:memory", "group:web", "group:sessions", "group:fs", "image", "image_generate", "gateway", "cron"],
+    "deny": ["group:runtime", "group:ui", "group:nodes",
+             "exec", "elevated", "x_search"],
+    "exec": {
+      "security": "deny"
+    },
+    "elevated": {
+      "enabled": false
+    }
+  },
+  "commands": {
+    "ownerAllowFrom": ["*"]
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "channels": {
+    "slack": {
+      "enabled": true,
+      "mode": "socket",
+      "appToken": "${SLACK_APP_TOKEN}",
+      "botToken": "${SLACK_BOT_TOKEN}",
+      "dmPolicy": "open",
+      "allowFrom": ["*"],
+      "groupPolicy": "open",
+      "requireMention": true,
+      "replyToMode": "off",
+      "capabilities": ["app_mention", "message.channels", "message.groups"],
+      "ackReaction": "eyes",
+      "typingReaction": "hourglass_flowing_sand"
+    },
+    "telegram": {
+      "enabled": false,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "dmPolicy": "open",
+      "allowFrom": ["*"]
+    },
+    "discord": {
+      "enabled": false,
+      "token": "${DISCORD_BOT_TOKEN}",
+      "dmPolicy": "open",
+      "allowFrom": ["*"]
+    },
+    "whatsapp": {
+      "enabled": false,
+      "dmPolicy": "open",
+      "allowFrom": ["*"]
+    }
+  },
+  "skills": {
+    "allowBundled": [
+      "web-search",
+      "weather",
+      "summarize",
+      "session-logs"
+    ]
+  },
+  "cron": {
+    "enabled": true
+  },
+  "logging": {
+    "redactSensitive": "tools",
+    "redactPatterns": ["api[_-]?key", "secret", "token", "password"]
+  }
+}

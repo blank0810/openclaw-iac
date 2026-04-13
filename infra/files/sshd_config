@@ -1,0 +1,43 @@
+# Hardened OpenSSH server configuration
+# Managed by Pyinfra — do not edit manually
+# Uploaded by infra/tasks/hardening.py
+
+# --- Network ---
+Port 2222
+AddressFamily inet
+ListenAddress 0.0.0.0
+
+# --- Authentication ---
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+KbdInteractiveAuthentication no
+UsePAM yes
+
+# --- Access control ---
+AllowUsers overlord101
+
+# --- Session hardening ---
+X11Forwarding no
+AllowTcpForwarding local
+AllowAgentForwarding no
+PermitTunnel no
+MaxAuthTries 6
+MaxSessions 5
+LoginGraceTime 30
+
+# --- Keep-alive ---
+ClientAliveInterval 300
+ClientAliveCountMax 2
+TCPKeepAlive no
+
+# --- Subsystems ---
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# --- Misc ---
+PrintLastLog yes
+PrintMotd no
+AcceptEnv LANG LC_*

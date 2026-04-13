@@ -1,0 +1,21 @@
+# Secrets — NEVER commit
+*.pem
+*.key
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+
+# Runtime / debug noise
+.playwright-mcp/
+pyinfra-debug.log
+pyinfra.zip
+*.log
+
+# Claude Code local settings (keep agents/ tracked)
+.claude/settings.local.json
