@@ -46,11 +46,11 @@ set +a
 # ---------------------------------------------------------------------------
 missing=()
 
-[[ -z "${SERVER3_IP:-}" ]]              && missing+=("SERVER3_IP")
-[[ -z "${SSH_KEY_PATH:-}" ]]            && missing+=("SSH_KEY_PATH")
-[[ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]]  && missing+=("OPENCLAW_GATEWAY_TOKEN")
-[[ -z "${SLACK_BOT_TOKEN:-}" ]]         && missing+=("SLACK_BOT_TOKEN")
-[[ -z "${SLACK_APP_TOKEN:-}" ]]         && missing+=("SLACK_APP_TOKEN")
+[[ -z "${SERVER3_IP:-}" ]]                && missing+=("SERVER3_IP")
+[[ -z "${SSH_KEY_PATH:-}" ]]              && missing+=("SSH_KEY_PATH")
+[[ -z "${CHAOS_GATEWAY_TOKEN:-}" ]]       && missing+=("CHAOS_GATEWAY_TOKEN")
+[[ -z "${CHAOS_SLACK_BOT_TOKEN:-}" ]]     && missing+=("CHAOS_SLACK_BOT_TOKEN")
+[[ -z "${CHAOS_SLACK_APP_TOKEN:-}" ]]     && missing+=("CHAOS_SLACK_APP_TOKEN")
 
 if [[ ${#missing[@]} -gt 0 ]]; then
     echo "ERROR: The following required variables are not set in .env:" >&2
@@ -90,8 +90,8 @@ echo ""
 echo "==> Deploy complete in ${DEPLOY_ELAPSED}s."
 echo ""
 echo "    SSH:          ssh -i ${SSH_KEY_PATH} -p ${SSH_PORT} -o IdentitiesOnly=yes ${SSH_USER}@${SERVER3_IP}"
-echo "    Health:       ssh ... 'curl -s http://127.0.0.1:18789/healthz'"
-echo "    Logs:         ssh ... 'docker logs -f openclaw-openclaw-1'"
-echo "    Control UI:   ssh -N -L 18789:127.0.0.1:18789 -p ${SSH_PORT} -o IdentitiesOnly=yes -i ${SSH_KEY_PATH} ${SSH_USER}@${SERVER3_IP}"
-echo "                  Then open http://localhost:18789"
+echo "    Health:       ssh ... 'curl -s http://127.0.0.1:18791/healthz'"
+echo "    Logs:         ssh ... 'docker logs -f openclaw-chaos'"
+echo "    Control UI:   ssh -N -L 18791:127.0.0.1:18791 -p ${SSH_PORT} -o IdentitiesOnly=yes -i ${SSH_KEY_PATH} ${SSH_USER}@${SERVER3_IP}"
+echo "                  Then open http://localhost:18791"
 echo ""

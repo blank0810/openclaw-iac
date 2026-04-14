@@ -65,7 +65,7 @@ info "pyinfra installed: $(.venv/bin/pyinfra --version)"
 if [ ! -f ".env" ]; then
     cp .env.example .env
     warn ".env created from .env.example — fill in your real values before proceeding."
-    warn "  Required: SERVER3_IP, SSH_KEY_PATH, OPENCLAW_GATEWAY_TOKEN"
+    warn "  Required: SERVER3_IP, SSH_KEY_PATH, CHAOS_GATEWAY_TOKEN"
     warn "  Edit:     nano .env"
 else
     info ".env already exists — skipping copy."
@@ -98,7 +98,7 @@ check_var() {
 
 check_var SERVER3_IP
 check_var SSH_KEY_PATH
-check_var OPENCLAW_GATEWAY_TOKEN
+check_var CHAOS_GATEWAY_TOKEN
 
 if [ ${#MISSING[@]} -gt 0 ]; then
     warn "The following required variables are empty in .env:"
