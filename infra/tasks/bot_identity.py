@@ -23,12 +23,7 @@ chaos_legacy_data_exists = host.get_fact(
 )
 
 # Each agent's data directory and workspace source.
-# Both use the same workspace files (identical setup).
 agents = {
-    "jarvis": {
-        "data_dir": "openclaw_data",
-        "workspace_src": "docker/workspace",
-    },
     "chaos": {
         "data_dir": "chaos/data",
         "workspace_src": "docker/workspace",

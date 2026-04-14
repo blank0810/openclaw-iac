@@ -5,7 +5,7 @@ Execution order:
   1. base_packages.py  — ensure system packages are current
   2. docker_install.py — ensure Docker Engine + Compose plugin are installed
   3. app_deploy.py     — upload compose file, render config, pull image, start containers
-  4. bot_identity.py   — seed workspace files (Jarvis identity + skills), once only
+  4. bot_identity.py   — seed workspace files (identity + skills), once only
   5. auto_update.py    — install nightly cron to pull latest image at 4 AM
 
 Usage:

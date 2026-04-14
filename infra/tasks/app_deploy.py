@@ -14,16 +14,6 @@ files.directory(
     mode="750",
 )
 
-# Upload the Docker Compose file.
-files.put(
-    name="Upload docker-compose.yml",
-    src="docker/docker-compose.yml",
-    dest=f"{deploy_path}/docker-compose.yml",
-    user=deploy_user,
-    group=deploy_user,
-    mode="644",
-)
-
 # Upload .env with tight permissions — it contains secrets.
 files.put(
     name="Upload .env",
@@ -34,28 +24,6 @@ files.put(
     mode="600",
 )
 
-# --- Jarvis Agent (existing) ---
-files.directory(
-    name=f"Create {deploy_path}/openclaw_data",
-    path=f"{deploy_path}/openclaw_data",
-    user="1000",
-    group="1000",
-    mode="700",
-)
-
-config_dest = f"{deploy_path}/openclaw_data/openclaw.json"
-config_exists = host.get_fact(File, path=config_dest)
-
-if not config_exists:
-    files.put(
-        name="Seed Jarvis openclaw.json (first deploy only)",
-        src="docker/openclaw.json",
-        dest=config_dest,
-        user="1000",
-        group="1000",
-        mode="600",
-    )
-
 # --- Chaos Agent (isolated subdirectory — see docs/plans/2026-04-09-chaos-agent-separation-design.md) ---
 chaos_dir = f"{deploy_path}/chaos"
 chaos_data_dir = f"{chaos_dir}/data"
@@ -63,7 +31,7 @@ legacy_chaos_data_dir = f"{deploy_path}/openclaw_data_chaos"
 chaos_backup_dir = f"{deploy_path}/openclaw_data_chaos.bak.2026-04-09"
 chaos_seeded_sentinel = f"{deploy_path}/.chaos-seeded"
 
-# Facts gathered at run start — used by the sentinel guard in Step 10 and the
+# Facts gathered at run start — used by the sentinel guard below and the
 # migration-needed guard in Steps 2-3.
 legacy_data_exists = host.get_fact(Directory, path=legacy_chaos_data_dir)
 chaos_data_dir_exists = host.get_fact(Directory, path=chaos_data_dir)
@@ -97,9 +65,9 @@ server.shell(
 
 # === STEPS 2 & 3: Stop Chaos + barrier ONLY when migration is pending ===
 # Avoids bouncing Chaos on re-runs that have nothing to migrate.
-# When migration IS needed, the bind mount must be released before the mv in Step 7.
+# When migration IS needed, the bind mount must be released before the mv in Step 5.
 # Container restarts to pick up new compose configs are handled by `docker compose up -d`
-# in Step 11, which only recreates when the service hash actually changes.
+# later, which only recreates when the service hash actually changes.
 if needs_migration:
     # Step 2: Explicit graceful stop with extended grace (default --remove-orphans
     # grace is 10s, too short when Composio MCP shutdown RPCs hang).
@@ -128,23 +96,7 @@ if needs_migration:
         _timeout=90,
     )
 
-# === STEP 4: Pull Jarvis image (runs before Jarvis compose up) ===
-server.shell(
-    name="Pull Jarvis OpenClaw image",
-    commands=[f"cd {deploy_path} && docker compose pull"],
-    _timeout=300,
-)
-
-# === STEP 5: Bring up Jarvis-only compose (sweeps any remaining orphan) ===
-# Chaos is already stopped in Step 2-3, so --remove-orphans is just bookkeeping here.
-# Plain `up -d` (no --force-recreate) keeps Jarvis untouched when its hash is unchanged.
-server.shell(
-    name="Start Jarvis via docker compose (Chaos already stopped)",
-    commands=[f"cd {deploy_path} && docker compose up -d --remove-orphans"],
-    _timeout=180,
-)
-
-# === STEP 6: Create chaos subdir (owned by uid 1000 so the container can read it) ===
+# === STEP 4: Create chaos subdir (owned by uid 1000 so the container can read it) ===
 files.directory(
     name=f"Create {chaos_dir}",
     path=chaos_dir,
@@ -153,7 +105,7 @@ files.directory(
     mode="750",
 )
 
-# === STEP 7: One-time data migration: openclaw_data_chaos -> chaos/data (with backup) ===
+# === STEP 5: One-time data migration: openclaw_data_chaos -> chaos/data (with backup) ===
 # Safe now because Chaos is stopped (Steps 2-3) and bind mount is released.
 # Guarded so it only runs when the source exists and destination doesn't.
 # Needs sudo because openclaw_data_chaos is mode 700 owned by uid 1000.
@@ -171,7 +123,7 @@ server.shell(
     _timeout=300,
 )
 
-# === STEP 8: Ensure chaos/data exists even on fresh hosts (no-op if migration ran) ===
+# === STEP 6: Ensure chaos/data exists even on fresh hosts (no-op if migration ran) ===
 files.directory(
     name=f"Ensure {chaos_data_dir}",
     path=chaos_data_dir,
@@ -180,7 +132,7 @@ files.directory(
     mode="700",
 )
 
-# === STEP 9: Upload Chaos's dedicated compose file ===
+# === STEP 7: Upload Chaos's dedicated compose file ===
 files.put(
     name="Upload chaos/docker-compose.yml",
     src="docker/chaos/docker-compose.yml",
@@ -206,7 +158,7 @@ files.directory(
     _sudo=True,
 )
 
-# === STEP 10: Sentinel-guarded seed-once ===
+# === STEP 8: Sentinel-guarded seed-once ===
 # Only fires when:
 #   - legacy_data_exists is False (no migration happening this run), AND
 #   - chaos_already_seeded is False (no prior seed on this host)
@@ -222,7 +174,7 @@ if not legacy_data_exists and not chaos_already_seeded:
         mode="600",
     )
 
-# === STEP 11: Pull Chaos image and bring up Chaos via its own compose file ===
+# === STEP 9: Pull Chaos image and bring up Chaos via its own compose file ===
 server.shell(
     name="Pull Chaos OpenClaw image",
     commands=[f"cd {chaos_dir} && docker compose --env-file ../.env pull"],
@@ -237,7 +189,7 @@ server.shell(
     _timeout=180,
 )
 
-# === STEP 12: Unconditionally ensure the sentinel exists at the end of the Chaos section ===
+# === STEP 10: Unconditionally ensure the sentinel exists at the end of the Chaos section ===
 # Idempotent: no-op if already present. Marks this host as "Chaos initialized" so
 # subsequent runs correctly skip the seed step even when the legacy dir is gone.
 files.file(

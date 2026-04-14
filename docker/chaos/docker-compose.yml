@@ -1,6 +1,6 @@
 # Chaos agent compose file.
 # Launch with: cd /opt/openclaw/chaos && docker compose --env-file ../.env up -d
-# Secrets come from /opt/openclaw/.env (shared with Jarvis).
+# Secrets come from /opt/openclaw/.env.
 
 services:
   chaos:

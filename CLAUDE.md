@@ -25,8 +25,8 @@ infra/              # Pyinfra (runs locally, SSHes into server)
   tasks/            # One file per concern (hardening, docker, app deploy)
   files/            # Static configs uploaded to server (sshd_config, fail2ban)
 docker/             # Docker artifacts (uploaded to server by Pyinfra)
-  docker-compose.yml
-  openclaw.json.tpl # LiteLLM connection config template
+  chaos/            # Chaos agent — docker-compose.yml + openclaw.json seed
+  workspace/        # Identity/personality files seeded into Chaos workspace
 scripts/            # Developer convenience (setup, deploy wrappers)
 docs/plans/         # Implementation plans
 ```
@@ -56,7 +56,7 @@ docs/plans/         # Implementation plans
 | **fail2ban** | Intrusion prevention tool that monitors SSH login attempts and temporarily bans IPs with repeated failures. |
 | **overlord101** | The admin user created on Server 3 during bootstrap. Has sudo access, SSH key-based auth only. All post-bootstrap operations run as this user. |
 | **`openclaw.json`** | OpenClaw's runtime config file (lives at `~/.openclaw/openclaw.json` inside the container). Configures which LLM provider to use — in our case, points `baseUrl` to LiteLLM on Server 2. |
-| **`OPENCLAW_GATEWAY_TOKEN`** | Auth token required when OpenClaw's Gateway binds to LAN (non-loopback). Protects the WebSocket/HTTP API from unauthorized access. Generate with `openssl rand -hex 32`. |
+| **`CHAOS_GATEWAY_TOKEN`** | Auth token required when OpenClaw's Gateway binds to LAN (non-loopback). Protects the WebSocket/HTTP API from unauthorized access. Generate with `openssl rand -hex 32`. |
 | **IaC** | Infrastructure-as-Code — managing server configuration through version-controlled scripts instead of manual SSH commands. |
 | **Idempotent** | An operation that produces the same result whether you run it once or multiple times. All Pyinfra tasks and `docker compose up` are idempotent. |
 | **Council** / **Council of Agents** | Refers to the team of specialized AI agents available in this project. When the user says "ask the council", "let the council decide", or "call the agents", dispatch the appropriate agent(s) from the tables below. Use project-scope agents first; fall back to global agents for cross-cutting concerns. |
@@ -74,8 +74,8 @@ docs/plans/         # Implementation plans
 - Gateway port: 18789 — **bound to loopback only** (not internet-facing)
 - Bridge port: 18790 — **bound to loopback only**
 - Health check: `GET http://127.0.0.1:18789/healthz`
-- Auth: `OPENCLAW_GATEWAY_TOKEN` required
-- LLM config: `~/.openclaw/openclaw.json` — currently Gemini (temporary), target is LiteLLM on Server 2
+- Auth: `CHAOS_GATEWAY_TOKEN` required
+- LLM config: `~/.openclaw/openclaw.json` — currently Gemini (direct), target is LiteLLM on Server 2 when ready
 - Config model: **seed-once** — Pyinfra uploads `openclaw.json` only on first deploy, then OpenClaw self-manages
 - Tokens use `${ENV_VAR}` syntax in config — substituted at runtime from container env
 - Persistent state: mount `~/.openclaw` as a Docker volume
@@ -143,5 +143,4 @@ When the user mentions "council", "council of agents", or "agents", use these sp
 - `docs/plans/2026-04-01-master-deployment-plan.md` — **master plan** (security + channels + seed-once config)
 - `docs/plans/2026-03-31-server3-implementation-plan.md` — original phased implementation (Phases 1-4 complete)
 
-Current scope: single OpenClaw instance with Gemini (temporary). Scaling (multi-instance) deferred.
-Switch to LiteLLM/Ollama when Servers 1+2 are ready.
+Current scope: Chaos agent only (single OpenClaw instance). Using Gemini directly; will switch to LiteLLM/Ollama when Servers 1+2 are ready.

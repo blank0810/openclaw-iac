@@ -18,15 +18,10 @@ deploy_path = host.data.deploy_path
 deploy_user = host.data.deploy_user
 
 cron_content = f"""# OpenClaw nightly auto-update — managed by Pyinfra
-# Pulls latest images for both agents and restarts only if changed.
-# Two staggered cron lines because Jarvis and Chaos live in separate compose
-# projects after the 2026-04-09 separation refactor. Plain `up -d` (no
+# Pulls latest Chaos image and restarts only if changed. Plain `up -d` (no
 # --force-recreate) only recreates when something actually changed.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-
-# Jarvis (shared compose project at deploy_path)
-0 4 * * * {deploy_user} cd {deploy_path} && docker compose pull --quiet && docker compose up -d --remove-orphans >> /var/log/openclaw-update.log 2>&1
 
 # Chaos (isolated compose project at deploy_path/chaos, uses shared .env via --env-file)
 5 4 * * * {deploy_user} cd {deploy_path}/chaos && docker compose --env-file ../.env pull --quiet && docker compose --env-file ../.env up -d --remove-orphans >> /var/log/openclaw-update.log 2>&1
