@@ -200,3 +200,34 @@ files.file(
     group=deploy_user,
     mode="644",
 )
+
+# === STEP 11: Enable JSON format in SearXNG settings.yml ===
+# SearXNG's generated-default settings.yml only enables `formats: [html]`.
+# OpenClaw's web_search plugin hits `/search?format=json` and gets a 403 at
+# the format allowlist gate before any engine runs. This step adds `- json`
+# to the formats list and restarts searxng only when the file was actually
+# patched. Idempotent: re-runs after patching are no-ops.
+#
+# Timing: searxng generates its settings.yml on first boot (usually <5s).
+# We wait up to 60s for the file to appear before failing loudly.
+server.shell(
+    name="Enable JSON format in SearXNG settings (fixes 403 on web_search)",
+    commands=[
+        (
+            f"FILE={chaos_searxng_dir}/settings.yml; "
+            f"for i in $(seq 1 60); do [ -f \"$FILE\" ] && break; sleep 1; done; "
+            f"if [ ! -f \"$FILE\" ]; then "
+            f"  echo 'FATAL: SearXNG settings.yml not generated within 60s' >&2; exit 1; "
+            f"fi; "
+            f"if grep -Pq '^    - json$' \"$FILE\"; then "
+            f"  echo 'SearXNG json format already enabled — no change'; exit 0; "
+            f"fi; "
+            f"cp \"$FILE\" \"${{FILE}}.bak.$(date +%s)\" && "
+            f"sed -i '/^  formats:$/a\\    - json' \"$FILE\" && "
+            f"cd {chaos_dir} && docker compose --env-file ../.env restart searxng && "
+            f"echo 'SearXNG json format enabled, searxng restarted'"
+        )
+    ],
+    _sudo=True,
+    _timeout=180,
+)
