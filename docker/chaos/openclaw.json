@@ -4,12 +4,16 @@
   },
   "models": {
     "providers": {
-      "anthropic": {
-        "baseUrl": "https://api.anthropic.com/v1",
-        "apiKey": "${ANTHROPIC_API_KEY}",
-        "api": "anthropic-messages",
+      "litellm": {
+        "baseUrl": "${LITELLM_BASE_URL}",
+        "apiKey": "${LITELLM_API_KEY}",
+        "api": "openai-completions",
         "models": [
-          { "id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5", "input": ["text", "image"] }
+          { "id": "anthropic/claude-sonnet-4-6", "name": "Claude Sonnet 4.6 (via LiteLLM)", "input": ["text", "image"] },
+          { "id": "gemini/gemini-3.1-pro-preview", "name": "Gemini 3.1 Pro (via LiteLLM)", "input": ["text", "image"] },
+          { "id": "qwen2.5:7b", "name": "Qwen 2.5 7B", "input": ["text"] },
+          { "id": "llama3.1:8b", "name": "LLaMA 3.1 8B", "input": ["text"] },
+          { "id": "gemma4:e4b", "name": "Gemma 4 E4B", "input": ["text"] }
         ]
       },
       "google": {
@@ -21,14 +25,13 @@
           { "id": "gemini-3-flash-preview", "name": "Gemini 3 Flash", "input": ["text", "image"] }
         ]
       },
-      "litellm": {
-        "baseUrl": "${LITELLM_BASE_URL}",
-        "apiKey": "${LITELLM_API_KEY}",
-        "api": "openai-completions",
+      "anthropic": {
+        "baseUrl": "https://api.anthropic.com/v1",
+        "apiKey": "${ANTHROPIC_API_KEY}",
+        "api": "anthropic-messages",
         "models": [
-          { "id": "qwen2.5:7b", "name": "Qwen 2.5 7B", "input": ["text"] },
-          { "id": "llama3.1:8b", "name": "LLaMA 3.1 8B", "input": ["text"] },
-          { "id": "gemma4:e4b", "name": "Gemma 4 E4B", "input": ["text"] }
+          { "id": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6", "input": ["text", "image"] },
+          { "id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5", "input": ["text", "image"] }
         ]
       }
     }
@@ -36,7 +39,7 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "google/gemini-3.1-pro-preview"
+        "primary": "litellm/anthropic/claude-sonnet-4-6"
       },
       "compaction": {
         "mode": "safeguard"
