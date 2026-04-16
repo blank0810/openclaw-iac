@@ -57,10 +57,15 @@ docker run --rm -it \
 **6. Nuclear option — reseed from repo:**
 
 ```bash
+# On the server:
 docker compose down chaos
-sudo rm state/openclaw.json state/.seeded
-cd ~/ai-project    # on your laptop
-./scripts/deploy.sh
+sudo rm /opt/openclaw/chaos/state/openclaw.json /opt/openclaw/chaos/state/.seeded
+
+# On your laptop:
+cd ~/ai-project
+source .venv/bin/activate
+set -a; source .env; set +a
+pyinfra --sudo -v infra/inventory.py infra/deploy.py
 ```
 
 This re-triggers `chaos_seed.py` because the sentinel is gone.

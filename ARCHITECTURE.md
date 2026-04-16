@@ -79,8 +79,9 @@ ai-project/
 │
 └── scripts/                     # Developer convenience
     ├── setup-local.sh           # Create venv, install deps, validate .env
-    ├── deploy.sh                # One-liner wrapper: activate venv, run pyinfra
-    └── scale-agents.sh          # Add/remove OpenClaw instances: ./scale-agents.sh N or +1/-1
+    ├── pin-digest.sh            # Capture tag+digest for .env (OpenClaw or SearXNG)
+    ├── restore-from-backup.sh   # On-server recovery: restore config or workspace
+    └── recovery.md              # Crash-loop runbook
 ```
 
 ### Why this layout
@@ -295,11 +296,9 @@ Connects as root, creates deploy user, hardens server, exits. After this, root S
 ### Standard deployment (repeatable)
 
 ```bash
-./scripts/deploy.sh
-
-# Which wraps:
 source .venv/bin/activate
-pyinfra infra/inventory.py infra/deploy.py
+set -a; source .env; set +a
+pyinfra --sudo -v infra/inventory.py infra/deploy.py
 ```
 
 Connects as deploy user on custom port, ensures packages and Docker are current, uploads compose file + `.env`, runs `docker compose up -d`.
@@ -392,7 +391,7 @@ The first run *must* connect as root. Every subsequent run uses the deploy user.
 
 ### Can defer
 
-5. **CI/CD pipeline.** Manual `./scripts/deploy.sh` for now, automate later.
+5. **CI/CD pipeline.** Manual `pyinfra infra/inventory.py infra/deploy.py` for now, automate later.
 6. **Monitoring.** Uptime-kuma or similar — add as a compose service later.
 7. **Domain + TLS.** Only if agents need to be accessed over the public internet.
 

@@ -481,9 +481,11 @@ docker compose start openclaw
 ### Config Reset (Seed-Once Model)
 
 ```bash
-# Delete config on server, redeploy -- Pyinfra re-seeds from docker/openclaw.json
-ssh ... "sudo rm /opt/openclaw/openclaw_data/openclaw.json"
-./scripts/deploy.sh
+# Delete config on server, redeploy -- Pyinfra re-seeds from docker/chaos/openclaw.json
+ssh ... "sudo rm /opt/openclaw/chaos/state/openclaw.json /opt/openclaw/chaos/state/.seeded"
+source .venv/bin/activate
+set -a; source .env; set +a
+pyinfra --sudo -v infra/inventory.py infra/deploy.py
 ```
 
 ### Rollback After Bad Update
