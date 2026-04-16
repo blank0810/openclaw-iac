@@ -1,149 +1,117 @@
 {
   "gateway": {
-    "mode": "local"
+    "bind": "0.0.0.0",
+    "port": 18789,
+    "auth": {
+      "mode": "token",
+      "token": "${CHAOS_GATEWAY_TOKEN}"
+    },
+    "tls": {
+      "enabled": false
+    }
   },
-  "models": {
-    "providers": {
-      "litellm": {
-        "baseUrl": "${LITELLM_BASE_URL}",
-        "apiKey": "${LITELLM_API_KEY}",
-        "api": "openai-completions",
-        "models": [
-          { "id": "anthropic/claude-sonnet-4-6", "name": "Claude Sonnet 4.6 (via LiteLLM)", "input": ["text", "image"] },
-          { "id": "gemini/gemini-3.1-pro-preview", "name": "Gemini 3.1 Pro (via LiteLLM)", "input": ["text", "image"] },
-          { "id": "qwen2.5:7b", "name": "Qwen 2.5 7B", "input": ["text"] },
-          { "id": "llama3.1:8b", "name": "LLaMA 3.1 8B", "input": ["text"] },
-          { "id": "gemma4:e4b", "name": "Gemma 4 E4B", "input": ["text"] }
-        ]
-      },
-      "google": {
-        "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
-        "apiKey": "${GEMINI_API_KEY}",
-        "api": "google-generative-ai",
-        "models": [
-          { "id": "gemini-3.1-pro-preview", "name": "Gemini 3.1 Pro", "input": ["text", "image"] },
-          { "id": "gemini-3-flash-preview", "name": "Gemini 3 Flash", "input": ["text", "image"] }
-        ]
-      },
-      "anthropic": {
-        "baseUrl": "https://api.anthropic.com/v1",
-        "apiKey": "${ANTHROPIC_API_KEY}",
-        "api": "anthropic-messages",
-        "models": [
-          { "id": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6", "input": ["text", "image"] },
-          { "id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5", "input": ["text", "image"] }
-        ]
-      }
+  "providers": {
+    "litellm": {
+      "type": "litellm",
+      "api": "openai-completions",
+      "baseUrl": "${CHAOS_LITELLM_BASE_URL}",
+      "apiKey": "${CHAOS_LITELLM_API_KEY}"
     }
   },
   "agents": {
     "defaults": {
+      "workspace": "/home/node/.openclaw/workspace",
+      "skipBootstrap": false,
+      "skills": [],
       "model": {
-        "primary": "litellm/anthropic/claude-sonnet-4-6"
-      },
-      "compaction": {
-        "mode": "safeguard"
-      },
-      "memorySearch": {
-        "enabled": true,
-        "provider": "gemini"
-      },
-      "sandbox": {
-        "mode": "off"
+        "primary": "litellm/simple-chaos",
+        "fallbacks": []
       }
     },
     "list": [
       {
-        "id": "main",
-        "identity": {
-          "name": "Chaos",
-          "theme": "A friendly and capable AI assistant",
-          "emoji": "robot_face"
+        "id": "chaos",
+        "name": "Chaos",
+        "description": "Default Chaos agent — fast, factual replies via the simple-chaos alias."
+      },
+      {
+        "id": "chaos-complex",
+        "name": "Chaos Complex",
+        "description": "Reasoning-grade Chaos — code, multi-step, long context. Via the complex-chaos alias.",
+        "model": {
+          "primary": "litellm/complex-chaos",
+          "fallbacks": []
+        }
+      },
+      {
+        "id": "chaos-local",
+        "name": "Chaos Local",
+        "description": "Background Chaos — heartbeats and ops. Never user-facing. Via the local alias.",
+        "model": {
+          "primary": "litellm/local",
+          "fallbacks": []
         }
       }
     ]
   },
-  "tools": {
-    "profile": "full",
-    "allow": ["group:memory", "group:web", "group:sessions", "group:fs", "image", "image_generate", "gateway", "cron"],
-    "deny": ["group:runtime", "group:ui", "group:nodes",
-             "exec", "elevated", "x_search"],
-    "exec": {
-      "security": "deny"
-    },
-    "elevated": {
-      "enabled": false
-    },
-    "web": {
-      "search": {
-        "provider": "searxng"
-      }
-    }
-  },
-  "commands": {
-    "ownerAllowFrom": ["*"]
-  },
   "session": {
-    "dmScope": "per-channel-peer"
+    "dmScope": "per-channel-peer",
+    "maxTurns": 40
   },
   "channels": {
     "slack": {
       "enabled": true,
+      "botToken": "${CHAOS_SLACK_BOT_TOKEN}",
+      "appToken": "${CHAOS_SLACK_APP_TOKEN}",
+      "signingSecret": "${CHAOS_SLACK_SIGNING_SECRET}",
       "mode": "socket",
-      "appToken": "${SLACK_APP_TOKEN}",
-      "botToken": "${SLACK_BOT_TOKEN}",
-      "dmPolicy": "open",
-      "allowFrom": ["*"],
-      "groupPolicy": "open",
+      "dmPolicy": "pairing",
+      "allowFrom": [],
       "requireMention": true,
-      "replyToMode": "off",
-      "capabilities": ["app_mention", "message.channels", "message.groups"],
-      "ackReaction": "eyes",
-      "typingReaction": "hourglass_flowing_sand"
-    },
-    "telegram": {
-      "enabled": false,
-      "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "dmPolicy": "open",
-      "allowFrom": ["*"]
-    },
-    "discord": {
-      "enabled": false,
-      "token": "${DISCORD_BOT_TOKEN}",
-      "dmPolicy": "open",
-      "allowFrom": ["*"]
-    },
-    "whatsapp": {
-      "enabled": false,
-      "dmPolicy": "open",
-      "allowFrom": ["*"]
-    }
-  },
-  "skills": {
-    "allowBundled": [
-      "web-search",
-      "weather",
-      "summarize",
-      "session-logs"
-    ]
-  },
-  "cron": {
-    "enabled": true
-  },
-  "plugins": {
-    "entries": {
-      "searxng": {
-        "enabled": true,
-        "config": {
-          "webSearch": {
-            "baseUrl": "http://searxng:8080"
-          }
-        }
+      "streaming": {
+        "mode": "native",
+        "nativeTransport": true
       }
     }
   },
-  "logging": {
-    "redactSensitive": "tools",
-    "redactPatterns": ["api[_-]?key", "secret", "token", "password"]
+  "tools": {
+    "profile": "messaging",
+    "allow": [
+      "gateway",
+      "cron",
+      "group:fs",
+      "group:memory",
+      "group:web",
+      "image"
+    ],
+    "deny": [
+      "exec",
+      "fs.delete",
+      "group:runtime",
+      "group:ui",
+      "elevated",
+      "sessions_spawn"
+    ],
+    "web": {
+      "search": {
+        "provider": "searxng",
+        "baseUrl": "http://searxng:8080"
+      }
+    }
+  },
+  "commands": {
+    "ownerAllowFrom": []
+  },
+  "cron": {
+    "enabled": true,
+    "jobs": []
+  },
+  "memory": {
+    "enabled": true,
+    "backend": "sqlite",
+    "path": "/home/node/.openclaw/memory.db"
+  },
+  "plugins": {
+    "enabled": []
   }
 }

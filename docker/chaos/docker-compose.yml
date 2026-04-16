@@ -1,100 +1,95 @@
-# Chaos agent compose file.
-# Launch with: cd /opt/openclaw/chaos && docker compose --env-file ../.env up -d
-# Secrets come from /opt/openclaw/.env.
+# Env var convention: openclaw.json uses ${CHAOS_*} tokens directly — we do NOT
+# rename vars in the compose environment block. All CHAOS_* vars come in via
+# env_file: .env and are visible to the container as-is. This keeps one naming
+# convention everywhere: .env file, compose, openclaw.json substitutions.
 
 services:
   chaos:
-    image: ghcr.io/openclaw/openclaw:2026.4.5
-    container_name: openclaw-chaos
+    image: ${CHAOS_IMAGE}
+    container_name: chaos
     init: true
     restart: unless-stopped
-    stop_grace_period: 30s  # extended from default 10s — Composio MCP shutdown RPCs can hang
-    command: ["node", "dist/index.js", "gateway", "--bind", "loopback", "--port", "18791"]
+    user: "1000:1000"
+    env_file: .env
+    environment:
+      TZ: ${TZ:-UTC}
+      OPENCLAW_CONFIG_DIR: /home/node/.openclaw
+      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
     ports:
-      - "127.0.0.1:18791:18791"
-      - "127.0.0.1:18792:18792"
+      - "127.0.0.1:18789:18789"
     volumes:
-      - ./data:/home/node/.openclaw
-    environment:
-      - OPENCLAW_GATEWAY_TOKEN=${CHAOS_GATEWAY_TOKEN:?CHAOS_GATEWAY_TOKEN must be set}
-      - NODE_OPTIONS=--max-old-space-size=1536
-      - TZ=${TZ:-UTC}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - LITELLM_BASE_URL=${LITELLM_BASE_URL:-}
-      - LITELLM_API_KEY=${LITELLM_API_KEY:-}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
-      - SLACK_BOT_TOKEN=${CHAOS_SLACK_BOT_TOKEN:-}
-      - SLACK_APP_TOKEN=${CHAOS_SLACK_APP_TOKEN:-}
-      - TELEGRAM_BOT_TOKEN=${CHAOS_TELEGRAM_BOT_TOKEN:-}
-      - DISCORD_BOT_TOKEN=${CHAOS_DISCORD_BOT_TOKEN:-}
-      - DISCORD_SERVER_ID=${CHAOS_DISCORD_SERVER_ID:-}
-      - DISCORD_OWNER_ID=${CHAOS_DISCORD_OWNER_ID:-}
-      - WHATSAPP_OWNER_PHONE=${CHAOS_WHATSAPP_OWNER_PHONE:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - SEARXNG_BASE_URL=http://searxng:8080
-    cap_drop:
-      - ALL
+      - ./state:/home/node/.openclaw
+      # Workspace mounted read-write so Chaos can author its own identity,
+      # skills, and models via the fs tool group. Nightly backup in
+      # chaos_backup.py protects against bad self-edits.
+      - ./workspace:/home/node/.openclaw/workspace
+    networks: [chaos_net]
+    cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
+      - seccomp=default
     read_only: true
     tmpfs:
-      - /tmp:size=100M
-    deploy:
-      resources:
-        limits:
-          cpus: "1.5"
-          memory: 2G
-    networks:
-      - chaos_net
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:18791/healthz || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 60s  # bumped from 20s — Chaos drifted state + MCP reconnect can take ~22s
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "10"
-
-  searxng:
-    image: searxng/searxng:latest
-    container_name: chaos-searxng
-    init: true
-    restart: unless-stopped
-    volumes:
-      - ./searxng_data:/etc/searxng
-    environment:
-      - SEARXNG_SECRET=${SEARXNG_SECRET:-searxng-chaos-secret-change-me}
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp:size=50M
-      - /var/cache/searxng:size=50M
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-    networks:
-      - chaos_net
-    healthcheck:
-      test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1:8080/healthz || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
+      - /tmp:size=100m,mode=1777
+      - /home/node/.cache:size=100m,mode=0755,uid=1000,gid=1000
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: "1.0"
+    pids_limit: 200
     logging:
       driver: json-file
       options:
         max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18789/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 240s
+    depends_on:
+      searxng:
+        condition: service_healthy
+
+  # SearXNG intentionally is NOT read_only and retains CHOWN/SETGID/SETUID caps.
+  # Its entrypoint drops privs from root to uid 977 and regenerates settings
+  # into /etc/searxng/ at startup. Adding read_only or stripping those caps
+  # crashes the container. This is known and deliberate.
+  searxng:
+    image: ${SEARXNG_IMAGE}
+    container_name: chaos_searxng
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+      SEARXNG_SECRET_KEY: ${SEARXNG_SECRET_KEY}
+      INSTANCE_NAME: chaos-searxng
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    networks: [chaos_net]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: "0.5"
+    pids_limit: 100
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
         max-file: "3"
+    # SearXNG has no /healthz endpoint — probe the root page instead.
+    # A 200 on / confirms the search UI is being served.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
 networks:
   chaos_net:
     driver: bridge
+    name: chaos_net

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/deploy.sh — repeatable deploy wrapper for Server 3 (OpenClaw Agents)
+# scripts/deploy.sh — repeatable deploy wrapper for Server 3.
 #
 # Usage: ./scripts/deploy.sh
 #
@@ -48,9 +48,15 @@ missing=()
 
 [[ -z "${SERVER3_IP:-}" ]]                && missing+=("SERVER3_IP")
 [[ -z "${SSH_KEY_PATH:-}" ]]              && missing+=("SSH_KEY_PATH")
+[[ -z "${CHAOS_IMAGE:-}" ]]               && missing+=("CHAOS_IMAGE")
 [[ -z "${CHAOS_GATEWAY_TOKEN:-}" ]]       && missing+=("CHAOS_GATEWAY_TOKEN")
+[[ -z "${CHAOS_LITELLM_BASE_URL:-}" ]]    && missing+=("CHAOS_LITELLM_BASE_URL")
+[[ -z "${CHAOS_LITELLM_API_KEY:-}" ]]     && missing+=("CHAOS_LITELLM_API_KEY")
 [[ -z "${CHAOS_SLACK_BOT_TOKEN:-}" ]]     && missing+=("CHAOS_SLACK_BOT_TOKEN")
 [[ -z "${CHAOS_SLACK_APP_TOKEN:-}" ]]     && missing+=("CHAOS_SLACK_APP_TOKEN")
+[[ -z "${CHAOS_SLACK_SIGNING_SECRET:-}" ]] && missing+=("CHAOS_SLACK_SIGNING_SECRET")
+[[ -z "${SEARXNG_IMAGE:-}" ]]             && missing+=("SEARXNG_IMAGE")
+[[ -z "${SEARXNG_SECRET_KEY:-}" ]]        && missing+=("SEARXNG_SECRET_KEY")
 
 if [[ ${#missing[@]} -gt 0 ]]; then
     echo "ERROR: The following required variables are not set in .env:" >&2
@@ -69,8 +75,7 @@ fi
 # 4. Run Pyinfra deploy
 # ---------------------------------------------------------------------------
 echo "==> Deploying to Server 3 (${SERVER3_IP})..."
-echo "    Phases: base packages -> docker install -> app deploy"
-echo "    This takes 3-8 minutes on a cold server (Docker image pull is the slow step)."
+echo "    Phases: base packages -> docker install -> chaos dirs -> chaos env -> chaos compose -> chaos workspace -> searxng config -> chaos seed -> chaos backup -> chaos service"
 echo ""
 
 DEPLOY_START=$(date +%s)
@@ -89,9 +94,5 @@ SSH_USER="${SSH_USER:-overlord101}"
 echo ""
 echo "==> Deploy complete in ${DEPLOY_ELAPSED}s."
 echo ""
-echo "    SSH:          ssh -i ${SSH_KEY_PATH} -p ${SSH_PORT} -o IdentitiesOnly=yes ${SSH_USER}@${SERVER3_IP}"
-echo "    Health:       ssh ... 'curl -s http://127.0.0.1:18791/healthz'"
-echo "    Logs:         ssh ... 'docker logs -f openclaw-chaos'"
-echo "    Control UI:   ssh -N -L 18791:127.0.0.1:18791 -p ${SSH_PORT} -o IdentitiesOnly=yes -i ${SSH_KEY_PATH} ${SSH_USER}@${SERVER3_IP}"
-echo "                  Then open http://localhost:18791"
+echo "    SSH: ssh -i ${SSH_KEY_PATH} -p ${SSH_PORT} -o IdentitiesOnly=yes ${SSH_USER}@${SERVER3_IP}"
 echo ""

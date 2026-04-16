@@ -1,5 +1,5 @@
 """
-Pyinfra v3 inventory for Server 3 (OpenClaw Agents).
+Pyinfra v3 inventory for Server 3.
 
 Reads connection details from environment variables. Uses os.environ[] (not
 os.getenv()) so a missing variable raises a KeyError immediately with a clear

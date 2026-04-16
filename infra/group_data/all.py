@@ -9,14 +9,7 @@ deploy_user = "overlord101"
 # bootstrap.py connects on port 22; deploy.py uses this port.
 ssh_port = 2222
 
-# Server-side path where docker-compose.yml and .env are uploaded.
-deploy_path = "/opt/openclaw"
-
-# Docker Compose project name (used in container/network names).
-compose_project = "openclaw"
-
-# UFW TCP ports to allow. Only SSH is exposed — OpenClaw binds to loopback,
-# so agent ports are not internet-facing. Access via SSH tunnel when needed.
+# UFW TCP ports to allow.
 allowed_tcp_ports = [2222]
 
 # Server timezone.
