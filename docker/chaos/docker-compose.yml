@@ -27,7 +27,10 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
-      - seccomp=default
+      # Docker's default seccomp profile is applied automatically when no
+      # `seccomp=<path>` is specified. Explicit `seccomp=default` is NOT a
+      # valid value — Docker parses it as a relative file path and fails
+      # with "no such file or directory".
     read_only: true
     tmpfs:
       - /tmp:size=100m,mode=1777
