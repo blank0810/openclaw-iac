@@ -1,6 +1,6 @@
 {
   "gateway": {
-    "bind": "0.0.0.0",
+    "bind": "lan",
     "port": 18789,
     "auth": {
       "mode": "token",
@@ -10,18 +10,42 @@
       "enabled": false
     }
   },
-  "providers": {
-    "litellm": {
-      "type": "litellm",
-      "api": "openai-completions",
-      "baseUrl": "${CHAOS_LITELLM_BASE_URL}",
-      "apiKey": "${CHAOS_LITELLM_API_KEY}"
+  "models": {
+    "providers": {
+      "litellm": {
+        "api": "openai-completions",
+        "baseUrl": "${CHAOS_LITELLM_BASE_URL}",
+        "apiKey": "${CHAOS_LITELLM_API_KEY}",
+        "models": [
+          {
+            "id": "simple-chaos",
+            "name": "Chaos (simple)",
+            "input": ["text", "image"],
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "complex-chaos",
+            "name": "Chaos (complex)",
+            "reasoning": true,
+            "input": ["text", "image"],
+            "contextWindow": 200000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "local",
+            "name": "Chaos (local)",
+            "input": ["text"],
+            "contextWindow": 32000,
+            "maxTokens": 4096
+          }
+        ]
+      }
     }
   },
   "agents": {
     "defaults": {
       "workspace": "/home/node/.openclaw/workspace",
-      "skipBootstrap": false,
       "skills": [],
       "model": {
         "primary": "litellm/simple-chaos",
@@ -31,13 +55,20 @@
     "list": [
       {
         "id": "chaos",
+        "default": true,
         "name": "Chaos",
-        "description": "Default Chaos agent — fast, factual replies via the simple-chaos alias."
+        "identity": {
+          "name": "Chaos",
+          "emoji": "spider_web"
+        }
       },
       {
         "id": "chaos-complex",
         "name": "Chaos Complex",
-        "description": "Reasoning-grade Chaos — code, multi-step, long context. Via the complex-chaos alias.",
+        "identity": {
+          "name": "Chaos Complex",
+          "emoji": "brain"
+        },
         "model": {
           "primary": "litellm/complex-chaos",
           "fallbacks": []
@@ -46,7 +77,10 @@
       {
         "id": "chaos-local",
         "name": "Chaos Local",
-        "description": "Background Chaos — heartbeats and ops. Never user-facing. Via the local alias.",
+        "identity": {
+          "name": "Chaos Local",
+          "emoji": "house"
+        },
         "model": {
           "primary": "litellm/local",
           "fallbacks": []
@@ -55,23 +89,30 @@
     ]
   },
   "session": {
+    "scope": "per-sender",
     "dmScope": "per-channel-peer",
-    "maxTurns": 40
+    "reset": {
+      "mode": "idle",
+      "idleMinutes": 240
+    }
   },
   "channels": {
     "slack": {
       "enabled": true,
+      "mode": "socket",
       "botToken": "${CHAOS_SLACK_BOT_TOKEN}",
       "appToken": "${CHAOS_SLACK_APP_TOKEN}",
       "signingSecret": "${CHAOS_SLACK_SIGNING_SECRET}",
-      "mode": "socket",
       "dmPolicy": "pairing",
       "allowFrom": [],
-      "requireMention": true,
+      "groupPolicy": "allowlist",
+      "channels": {},
       "streaming": {
-        "mode": "native",
+        "mode": "partial",
         "nativeTransport": true
-      }
+      },
+      "ackReaction": "eyes",
+      "typingReaction": "hourglass_flowing_sand"
     }
   },
   "tools": {
@@ -94,24 +135,40 @@
     ],
     "web": {
       "search": {
+        "enabled": true,
         "provider": "searxng",
-        "baseUrl": "http://searxng:8080"
+        "maxResults": 5
+      },
+      "fetch": {
+        "enabled": true,
+        "maxChars": 50000
       }
     }
   },
   "commands": {
-    "ownerAllowFrom": []
+    "native": "auto",
+    "restart": true,
+    "ownerAllowFrom": [],
+    "useAccessGroups": true
   },
   "cron": {
-    "enabled": true,
-    "jobs": []
+    "enabled": true
   },
   "memory": {
-    "enabled": true,
-    "backend": "sqlite",
-    "path": "/home/node/.openclaw/memory.db"
+    "backend": "qmd",
+    "citations": "auto"
   },
   "plugins": {
-    "enabled": []
+    "enabled": true,
+    "entries": {
+      "searxng": {
+        "enabled": true,
+        "config": {
+          "webSearch": {
+            "baseUrl": "http://searxng:8080"
+          }
+        }
+      }
+    }
   }
 }
