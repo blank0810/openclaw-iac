@@ -13,9 +13,9 @@ Execution order:
   9. chaos_backup.py          — install nightly backup cron
  10. chaos_service.py         — docker compose pull + up -d
 
-Usage:
-  pyinfra infra/inventory.py infra/deploy.py
-  pyinfra infra/inventory.py infra/deploy.py --dry
+Usage (from project root):
+  pyinfra infra/inventories/deploy.py infra/deploy.py
+  pyinfra infra/inventories/deploy.py infra/deploy.py --dry
 """
 
 from pyinfra import local

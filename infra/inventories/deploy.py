@@ -4,9 +4,9 @@ Standard deploy inventory — connects as overlord101 on the hardened SSH port.
 Used for all repeatable deploys (infra/deploy.py and any task under
 infra/tasks/). Assumes the server has already been bootstrapped.
 
-Usage:
-    pyinfra --chdir infra inventories/deploy.py deploy.py
-    pyinfra --chdir infra inventories/deploy.py deploy.py --dry
+Usage (from project root):
+    pyinfra infra/inventories/deploy.py infra/deploy.py
+    pyinfra infra/inventories/deploy.py infra/deploy.py --dry
 
 Env vars required (loaded from .env via `set -a; source .env; set +a`):
     SERVER3_IP     — the target Hetzner VPS IP

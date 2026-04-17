@@ -298,7 +298,7 @@ Connects as root, creates deploy user, hardens server, exits. After this, root S
 ```bash
 source .venv/bin/activate
 set -a; source .env; set +a
-pyinfra --chdir infra inventories/bootstrap.py bootstrap.py
+pyinfra infra/inventories/bootstrap.py infra/bootstrap.py
 ```
 
 ### Standard deployment (repeatable)
@@ -306,7 +306,7 @@ pyinfra --chdir infra inventories/bootstrap.py bootstrap.py
 ```bash
 source .venv/bin/activate
 set -a; source .env; set +a
-pyinfra --chdir infra inventories/deploy.py deploy.py
+pyinfra infra/inventories/deploy.py infra/deploy.py
 ```
 
 Connects as deploy user on custom port, ensures packages and Docker are current, uploads compose file + `.env`, runs `docker compose up -d`.
@@ -399,7 +399,7 @@ The first run *must* connect as root. Every subsequent run uses the deploy user.
 
 ### Can defer
 
-5. **CI/CD pipeline.** Manual `pyinfra --chdir infra inventories/deploy.py deploy.py` for now, automate later.
+5. **CI/CD pipeline.** Manual `pyinfra infra/inventories/deploy.py infra/deploy.py` for now, automate later.
 6. **Monitoring.** Uptime-kuma or similar — add as a compose service later.
 7. **Domain + TLS.** Only if agents need to be accessed over the public internet.
 

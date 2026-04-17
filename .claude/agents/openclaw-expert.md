@@ -485,7 +485,7 @@ docker compose start openclaw
 ssh ... "sudo rm /opt/openclaw/chaos/state/openclaw.json /opt/openclaw/chaos/state/.seeded"
 source .venv/bin/activate
 set -a; source .env; set +a
-pyinfra --chdir infra inventories/deploy.py deploy.py
+pyinfra infra/inventories/deploy.py infra/deploy.py
 ```
 
 ### Rollback After Bad Update

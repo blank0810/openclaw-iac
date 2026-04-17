@@ -7,11 +7,11 @@
 #   - Root login via SSH is permanently disabled
 #   - UFW and fail2ban are active
 #
-# Invocation (run once from project root):
-#   pyinfra --user root --port 22 --key $SSH_KEY_PATH $SERVER3_IP infra/bootstrap.py
+# Invocation (from project root):
+#   pyinfra infra/inventories/bootstrap.py infra/bootstrap.py
 #
 # All subsequent deploys use:
-#   pyinfra infra/inventory.py infra/deploy.py
+#   pyinfra infra/inventories/deploy.py infra/deploy.py
 # =============================================================================
 
 from pyinfra import local

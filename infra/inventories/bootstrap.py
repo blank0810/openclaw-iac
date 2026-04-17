@@ -5,9 +5,9 @@ Used ONLY with infra/bootstrap.py for one-time server hardening on a fresh
 Hetzner Ubuntu box. After bootstrap succeeds, root SSH is disabled and
 every subsequent run uses infra/inventories/deploy.py.
 
-Usage:
-    pyinfra --chdir infra inventories/bootstrap.py bootstrap.py
-    pyinfra --chdir infra inventories/bootstrap.py bootstrap.py --dry
+Usage (from project root):
+    pyinfra infra/inventories/bootstrap.py infra/bootstrap.py
+    pyinfra infra/inventories/bootstrap.py infra/bootstrap.py --dry
 
 Env vars required (loaded from .env via `set -a; source .env; set +a`):
     SERVER3_IP     — the target Hetzner VPS IP
