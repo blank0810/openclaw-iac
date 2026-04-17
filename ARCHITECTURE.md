@@ -293,12 +293,20 @@ pyinfra --user root --key ~/.ssh/id_ed25519 <HETZNER_IP> infra/bootstrap.py
 
 Connects as root, creates deploy user, hardens server, exits. After this, root SSH is disabled. All future access uses the deploy user on the custom SSH port.
 
+### First-time bootstrap (one command, one time)
+
+```bash
+source .venv/bin/activate
+set -a; source .env; set +a
+pyinfra --chdir infra inventories/bootstrap.py bootstrap.py
+```
+
 ### Standard deployment (repeatable)
 
 ```bash
 source .venv/bin/activate
 set -a; source .env; set +a
-pyinfra --sudo -v infra/inventory.py infra/deploy.py
+pyinfra --chdir infra inventories/deploy.py deploy.py
 ```
 
 Connects as deploy user on custom port, ensures packages and Docker are current, uploads compose file + `.env`, runs `docker compose up -d`.
@@ -391,7 +399,7 @@ The first run *must* connect as root. Every subsequent run uses the deploy user.
 
 ### Can defer
 
-5. **CI/CD pipeline.** Manual `pyinfra infra/inventory.py infra/deploy.py` for now, automate later.
+5. **CI/CD pipeline.** Manual `pyinfra --chdir infra inventories/deploy.py deploy.py` for now, automate later.
 6. **Monitoring.** Uptime-kuma or similar — add as a compose service later.
 7. **Domain + TLS.** Only if agents need to be accessed over the public internet.
 

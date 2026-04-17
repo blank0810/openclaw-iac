@@ -65,7 +65,7 @@ sudo rm /opt/openclaw/chaos/state/openclaw.json /opt/openclaw/chaos/state/.seede
 cd ~/ai-project
 source .venv/bin/activate
 set -a; source .env; set +a
-pyinfra --sudo -v infra/inventory.py infra/deploy.py
+pyinfra --chdir infra inventories/deploy.py deploy.py
 ```
 
 This re-triggers `chaos_seed.py` because the sentinel is gone.
