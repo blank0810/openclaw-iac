@@ -1,7 +1,12 @@
+> **⚠️ SUPERSEDED 2026-04-21** — OpenClaw is scratched as a project
+> direction. Server 3 is no longer planned to host an agent layer. This
+> document is kept as historical record only. See `CLAUDE.md` for the
+> current project scope.
+
 # Chaos — Gateway-Only, Read-Only Rebuild (IaC Design)
 
 **Date:** 2026-04-18
-**Status:** Design approved, pending implementation
+**Status:** Implemented 2026-04-19 (commit `1e19c5c`), superseded 2026-04-21
 **Target:** Server 3 (Hetzner, hardened Docker host)
 **Agent image:** `ghcr.io/openclaw/openclaw:2026.4.14` (tag + digest pin)
 

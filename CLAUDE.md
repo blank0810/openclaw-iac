@@ -5,9 +5,12 @@
 Infrastructure-as-Code for a Hetzner VPS that will host AI agent workloads.
 Pyinfra runs locally, SSHes into the server, hardens it, and installs Docker.
 
-The agent layer was previously OpenClaw (Chaos). It has been removed
-(2026-04-17) for a fresh rebuild. Repo currently provisions only the
-hardened host — no app containers.
+The agent layer was previously OpenClaw (Chaos). It was removed
+(2026-04-17), briefly rebuilt gateway-only (2026-04-19, commit
+`1e19c5c`), then **permanently scratched 2026-04-21**. OpenClaw is no
+longer a project direction. Server 3 stays a hardened Docker host for
+future unrelated workloads. Do not reintroduce OpenClaw or Chaos
+without an explicit decision to reverse course.
 
 ## Architecture
 

@@ -1,6 +1,10 @@
+> **⚠️ SUPERSEDED 2026-04-21** — OpenClaw is scratched as a project
+> direction. Do NOT execute this plan. Kept as a historical artifact of
+> the brainstorm + plan-writing process.
+
 # Chaos — Slack + Full Tool Surface Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> ~~**For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.~~ (superseded — do not execute)
 
 **Goal:** Wire the deployed `chaos` agent to Slack (Socket Mode) and enable full OpenClaw tool surface (minus `fs.delete` + `elevated`) with a SearXNG sidecar for web search and three agents for `/model` routing. Fills the scaffolding slots carved by commit `1e19c5c`.
 

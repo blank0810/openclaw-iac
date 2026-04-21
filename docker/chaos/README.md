@@ -1,11 +1,17 @@
-# Chaos — OpenClaw 4.14, Gateway-Only
+> **⚠️ SUPERSEDED 2026-04-21** — OpenClaw/Chaos is permanently out of
+> project scope. The files in this directory remain as historical record
+> (commit `1e19c5c`) but the stack is no longer deployed, and the
+> `chaos_deploy.py` task is no longer included in `infra/deploy.py`.
+> Do not reintroduce without a decision to reverse course.
 
-Single-container OpenClaw stack. Deployed to `/opt/openclaw/chaos/` on
-Server 3 by `infra/tasks/chaos_deploy.py`. Gateway is published on
-`127.0.0.1:18789` only — access via SSH tunnel.
+# Chaos — OpenClaw 4.14, Gateway-Only (HISTORICAL)
+
+Single-container OpenClaw stack. Was deployed to `/opt/openclaw/chaos/`
+on Server 3 by `infra/tasks/chaos_deploy.py` between 2026-04-19 and
+2026-04-21. Torn down 2026-04-21.
 
 See `docs/plans/2026-04-18-chaos-gateway-only-design.md` for the full
-spec.
+spec (also superseded).
 
 ## Deploy
 

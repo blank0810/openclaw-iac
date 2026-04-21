@@ -1,7 +1,11 @@
+> **⚠️ SUPERSEDED 2026-04-21** — OpenClaw is scratched as a project
+> direction. This design was never implemented. Kept as historical
+> record of the decision-making process.
+
 # Chaos — Slack Wiring + Full Tool Surface (IaC Design)
 
 **Date:** 2026-04-21
-**Status:** Design approved, pending implementation
+**Status:** Superseded same day — never implemented
 **Target:** Server 3 (Hetzner, hardened Docker host)
 **Agent image:** `ghcr.io/openclaw/openclaw:2026.4.14` (tag + digest pin, unchanged)
 **Builds on:** `docs/plans/2026-04-18-chaos-gateway-only-design.md`
