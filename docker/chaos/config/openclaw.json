@@ -1,0 +1,44 @@
+{
+  "gateway": {
+    "bind": "lan",
+    "port": 18789,
+    "auth": { "mode": "token", "token": "${CHAOS_GATEWAY_TOKEN}" },
+    "tls": { "enabled": false }
+  },
+  "models": {
+    "providers": {
+      "litellm": {
+        "api": "openai-completions",
+        "baseUrl": "${CHAOS_LITELLM_BASE_URL}",
+        "apiKey": "${CHAOS_LITELLM_API_KEY}",
+        "models": [
+          { "id": "simple-chaos",  "name": "Simple Chaos",  "input": ["text"], "contextWindow": 200000, "maxTokens": 8192 },
+          { "id": "complex-chaos", "name": "Complex Chaos", "input": ["text"], "contextWindow": 200000, "maxTokens": 8192 },
+          { "id": "local",         "name": "Local",         "input": ["text"], "contextWindow": 32000,  "maxTokens": 4096 }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/home/node/.openclaw/workspace",
+      "skills": [],
+      "model": { "primary": "litellm/simple-chaos", "fallbacks": [] }
+    },
+    "list": [
+      { "id": "chaos", "default": true, "name": "Chaos", "identity": { "name": "Chaos", "emoji": "spider_web" } }
+    ]
+  },
+  "session": { "scope": "per-sender", "reset": { "mode": "idle", "idleMinutes": 240 } },
+  "channels": {},
+  "tools": {
+    "profile": "messaging",
+    "allow": ["gateway"],
+    "deny":  ["exec", "fs.delete", "group:fs", "group:web", "group:runtime", "group:ui", "group:memory", "cron", "elevated", "sessions_spawn"]
+  },
+  "commands": { "native": "auto", "restart": true, "ownerAllowFrom": [], "useAccessGroups": true },
+  "cron":     { "enabled": false },
+  "memory":   { "backend": "builtin", "citations": "auto" },
+  "plugins":  { "enabled": false, "entries": {} },
+  "messages": {}
+}
