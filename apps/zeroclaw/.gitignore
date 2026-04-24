@@ -1,0 +1,13 @@
+# ZeroClaw runtime state (installed binary + config live in ~/.zeroclaw/, not here —
+# these ignores are defense-in-depth in case anything gets written locally)
+
+# Upstream clone pulled by install.sh
+upstream/
+
+# Local config / secrets / workspace
+config.toml
+workspace/
+*.log
+
+# Hands-on testing notes (optional — remove line below if you want to track notes)
+notes.md
