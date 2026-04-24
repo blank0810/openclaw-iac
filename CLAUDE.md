@@ -1,45 +1,57 @@
-# Cloudesk AI Project — Server 3 (Hardened Docker Host)
+# Cloudesk AI Project — Monorepo
 
 ## What This Is
 
-Infrastructure-as-Code for a Hetzner VPS that will host AI agent workloads.
-Pyinfra runs locally, SSHes into the server, hardens it, and installs Docker.
+Monorepo containing:
+
+1. **Infrastructure-as-Code** (`infra/`) — Pyinfra scripts that harden a
+   Hetzner VPS (Server 3) into a locked-down Docker host.
+2. **Agent applications** (`apps/`) — user-facing agent products that
+   may or may not end up deployed on Server 3.
 
 The agent layer was previously OpenClaw (Chaos). It was removed
 (2026-04-17), briefly rebuilt gateway-only (2026-04-19, commit
 `1e19c5c`), then **permanently scratched 2026-04-21**. OpenClaw is no
-longer a project direction. Server 3 stays a hardened Docker host for
-future unrelated workloads. Do not reintroduce OpenClaw or Chaos
+longer a project direction. Do not reintroduce OpenClaw or Chaos
 without an explicit decision to reverse course.
+
+Current agent direction: `apps/slack-agent/` is a live MVP built on
+**Anthropic Managed Agents** + Composio for Gmail/Calendar OAuth.
+`apps/zeroclaw/` is an upcoming exploration of the Rust-based ZeroClaw
+runtime as a possible self-hosted path when the MVP's limitations
+(no scheduling, limited multi-tenancy) bite.
 
 ## Architecture
 
 - **Server 1**: Ollama (Model Server) — Qwen 2.5 7B + LLaMA 3.1 8B on port 11434
 - **Server 2**: LiteLLM Proxy (API Gateway) — routing, rate limits, fallbacks on port 4000
-- **Server 3**: This repo — hardened Docker host, agent stack TBD
+- **Server 3**: Hardened Docker host — target for future self-hosted agents (ZeroClaw etc.)
+- **Local / Anthropic cloud**: `apps/slack-agent/` runs locally for now; sessions live on Anthropic's Managed Agents runtime
 
 All server IPs are in `.env` (gitignored). See `.env.example` for the template.
 
 ## Project Structure
 
 ```
-infra/                 # Pyinfra (runs locally, SSHes into server)
+infra/                 # Pyinfra (runs locally, SSHes into Server 3)
   bootstrap.py         # One-time root setup: create overlord101, harden, UFW
   deploy.py            # Repeatable: ensure base packages + Docker
   inventories/
     bootstrap.py       # Connects as root on port 22
     deploy.py          # Connects as overlord101 on port 2222
   files/               # Static configs uploaded to server (sshd_config, fail2ban)
-  tasks/               # One file per concern
-    base_packages.py
-    deploy_user.py
-    docker_install.py
-    hardening.py
+  tasks/               # One file per concern (base_packages, deploy_user, docker_install, hardening)
 group_data/            # Shared non-secret config (deploy_user, ssh_port, etc.)
-docker/                # Empty — drop new agent compose stacks here
+docker/                # Drop-in compose stacks for Server 3
 scripts/
   setup-local.sh       # Local venv + .env bootstrap
-docs/plans/            # Historical implementation plans (Chaos era, kept for reference)
+apps/
+  slack-agent/         # Managed Agents + Slack + Composio MVP (live, local-run)
+    src/               # app.py (Slack bot), session_store.py
+    scripts/           # setup_agent.py, setup_composio.py
+  zeroclaw/            # (planned) Rust-based self-hosted runtime exploration
+docs/
+  archive/             # Historical Chaos/OpenClaw plans (reference only)
 ```
 
 ## Key Conventions
@@ -63,12 +75,17 @@ docs/plans/            # Historical implementation plans (Chaos era, kept for re
 | **overlord101** | Admin user created during bootstrap. Sudo + docker group, key-only SSH. |
 | **IaC** | Infrastructure-as-Code — managing servers via version-controlled scripts, not ad-hoc SSH. |
 | **Idempotent** | An operation that produces the same result every time. All Pyinfra tasks are idempotent. |
+| **Managed Agents (CMA)** | Anthropic's hosted agent runtime. `agents.create()` once (persisted config), `sessions.create()` per run. Used by `apps/slack-agent/`. |
+| **Composio** | 3rd-party OAuth + tool-bridge service. Provides Gmail/Calendar/Salesforce/HubSpot connectors to the Slack agent via REST API. |
 | **Council** | The set of specialized agents available in this repo (see below). When the user says "ask the council" or "call the agents", dispatch the relevant one. |
 
 ## Tech Stack
 
 - **Pyinfra** (>=3, <4) — IaC tool, runs locally, orchestrates server setup over SSH
 - **Docker + Docker Compose** — container runtime on the server (installed by `deploy.py`)
+- **Anthropic Managed Agents** (beta `managed-agents-2026-04-01`) — runtime for `apps/slack-agent/`
+- **Composio** — OAuth + tool bridge for Gmail/Google Calendar inside `apps/slack-agent/`
+- **Slack Bolt** (Socket Mode) — chat surface for `apps/slack-agent/`
 
 ## Security Rules
 
@@ -115,6 +132,6 @@ When the user mentions "council", "council of agents", or "agents", use these sp
 - **"Council, implement this"** — use infra-engineer (project-scope) for infra work
 - **Multiple agents** — run in parallel when tasks are independent
 
-## Plans
+## Plans & History
 
-- `docs/plans/` — historical Chaos-era implementation plans, kept as reference for what worked and what to avoid in the next agent build.
+- `docs/archive/` — historical Chaos/OpenClaw-era implementation plans, kept as reference for what worked and what to avoid in future agent builds. **Do not use as a spec for new work.**

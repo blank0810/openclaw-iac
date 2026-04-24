@@ -1,0 +1,4 @@
+anthropic>=0.88.0
+slack-bolt>=1.20.0
+python-dotenv>=1.0.0
+composio>=0.8.0

@@ -20,3 +20,7 @@ pyinfra.zip
 # Claude Code local settings (keep agents/ tracked)
 .claude/settings.local.json
 .env.bak-*
+
+# App-level artifacts
+apps/*/sessions.db
+credentials.json
