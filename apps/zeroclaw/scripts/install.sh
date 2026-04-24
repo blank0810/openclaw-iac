@@ -29,12 +29,22 @@ fi
 
 command -v cargo >/dev/null 2>&1 || err "cargo still not on PATH after rustup install — open a new shell and retry"
 
-# 2. System build deps (common Rust requirements + zeroclaw specifics)
+# 2. System build deps (common Rust requirements + zeroclaw specifics).
+# Skip the sudo step if all packages are already installed — keeps the script
+# non-interactive when re-run after initial setup.
 if command -v apt-get >/dev/null 2>&1; then
-  log "ensuring apt build deps (pkg-config, libssl-dev, build-essential)"
-  sudo apt-get update -qq
-  sudo apt-get install -y --no-install-recommends \
-    build-essential pkg-config libssl-dev ca-certificates git
+  APT_DEPS=(build-essential pkg-config libssl-dev ca-certificates git)
+  missing=()
+  for pkg in "${APT_DEPS[@]}"; do
+    dpkg -l "$pkg" 2>/dev/null | grep -qE "^ii" || missing+=("$pkg")
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    log "apt build deps already installed, skipping sudo step"
+  else
+    log "installing missing apt build deps: ${missing[*]}"
+    sudo apt-get update -qq
+    sudo apt-get install -y --no-install-recommends "${missing[@]}"
+  fi
 fi
 
 # 3. Clone or update upstream
@@ -56,6 +66,11 @@ cargo install --path . --force --locked
 command -v zeroclaw >/dev/null 2>&1 || err "zeroclaw not on PATH — ensure ~/.cargo/bin is in PATH"
 log "installed: $(zeroclaw --version 2>/dev/null || echo 'zeroclaw')"
 
-# 5. Onboard
+# 5. Onboard (skip if SKIP_ONBOARD=1, e.g., for unattended/background installs)
+if [[ "${SKIP_ONBOARD:-0}" == "1" ]]; then
+  log "SKIP_ONBOARD=1 — binary installed, run 'zeroclaw onboard' manually when ready"
+  exit 0
+fi
+
 log "launching \`zeroclaw onboard\` — follow prompts to configure workspace + provider"
 exec zeroclaw onboard
