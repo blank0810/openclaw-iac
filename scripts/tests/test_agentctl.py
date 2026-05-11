@@ -4,7 +4,7 @@ try:
 except ImportError:
     import tomli as tomllib
 
-from agentctl import SlugError, init_tenant, validate_slug
+from agentctl import SlugError, init_tenant, main, validate_slug
 
 
 @pytest.mark.parametrize(
@@ -67,3 +67,27 @@ def test_init_refuses_to_overwrite(tmp_path):
     init_tenant("agent-edgar", repo_root=repo_root, provider="anthropic")
     with pytest.raises(FileExistsError):
         init_tenant("agent-edgar", repo_root=repo_root, provider="anthropic")
+
+
+def test_init_dispatches_to_init_tenant(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    template_dir = tmp_path / "tenants" / "_template"
+    template_dir.mkdir(parents=True)
+    (template_dir / "tenant.toml.example").write_text("a = 1\n")
+    (template_dir / ".env.example").write_text("\n")
+
+    exit_code = main(["init", "agent-edgar", "--provider", "anthropic"])
+    assert exit_code == 0
+    assert (tmp_path / "tenants" / "agent-edgar" / "tenant.toml").exists()
+
+
+def test_new_requires_tenant_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    exit_code = main(["new", "agent-missing"])
+    assert exit_code != 0
+
+
+def test_invalid_slug_exits_nonzero(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    exit_code = main(["new", "edgar"])
+    assert exit_code != 0
