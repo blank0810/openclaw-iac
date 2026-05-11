@@ -1,0 +1,14 @@
+[Unit]
+Description=Run Slack liveness probe for {{ agent_name }} every 3 minutes
+After=docker.service
+Requires=docker.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+RandomizedDelaySec=15s
+Unit={{ agent_name }}-slack-probe.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -14,7 +14,7 @@ import re
 from io import StringIO
 
 from pyinfra import host
-from pyinfra.operations import files, server, systemd
+from pyinfra.operations import apt, files, server, systemd
 
 AGENT_NAME = os.environ.get("AGENT_NAME", "").strip()
 SLUG_RE = re.compile(r"^agent-[a-z0-9]([a-z0-9-]{0,27}[a-z0-9])?$")
@@ -86,6 +86,11 @@ composio_mcp_url = os.environ.get("COMPOSIO_MCP_URL", "")
 composio_mcp_transport = os.environ.get("COMPOSIO_MCP_TRANSPORT", "sse")
 composio_mcp_auth_header = os.environ.get("COMPOSIO_MCP_AUTH_HEADER", "Authorization")
 composio_mcp_api_key = os.environ.get("COMPOSIO_MCP_API_KEY", "")
+
+apt.packages(
+    name=f"[{AGENT_NAME}] install jq for slack probe",
+    packages=["jq"],
+)
 
 DIR_LAYOUT = [
     ("", deploy_user, deploy_user, "750"),
@@ -221,4 +226,63 @@ server.shell(
     commands=[healthcheck_cmd],
     _sudo=True,
     _timeout=300,
+)
+
+files.directory(
+    name=f"[{AGENT_NAME}] ensure {agent_dir}/bin",
+    path=f"{agent_dir}/bin",
+    present=True,
+    user=deploy_user,
+    group=deploy_user,
+    mode="750",
+)
+files.directory(
+    name=f"[{AGENT_NAME}] ensure /var/lib/{AGENT_NAME}-probe",
+    path=f"/var/lib/{AGENT_NAME}-probe",
+    present=True,
+    user="root",
+    group="root",
+    mode="750",
+)
+files.file(
+    name=f"[{AGENT_NAME}] ensure /var/log/{AGENT_NAME}-probe.log",
+    path=f"/var/log/{AGENT_NAME}-probe.log",
+    present=True,
+    user="root",
+    group="root",
+    mode="640",
+)
+files.put(
+    name=f"[{AGENT_NAME}] upload slack-probe.sh",
+    src="infra/files/agent-slack-probe.sh",
+    dest=f"{agent_dir}/bin/slack-probe.sh",
+    user=deploy_user,
+    group=deploy_user,
+    mode="750",
+)
+files.template(
+    name=f"[{AGENT_NAME}] render probe service unit",
+    src="infra/files/agent-slack-probe.service.j2",
+    dest=f"/etc/systemd/system/{AGENT_NAME}-slack-probe.service",
+    user="root",
+    group="root",
+    mode="600",
+    agent_name=AGENT_NAME,
+    slack_app_token=slack_app_token,
+)
+files.template(
+    name=f"[{AGENT_NAME}] render probe timer unit",
+    src="infra/files/agent-slack-probe.timer.j2",
+    dest=f"/etc/systemd/system/{AGENT_NAME}-slack-probe.timer",
+    user="root",
+    group="root",
+    mode="644",
+    agent_name=AGENT_NAME,
+)
+systemd.daemon_reload(name=f"[{AGENT_NAME}] systemctl daemon-reload")
+systemd.service(
+    name=f"[{AGENT_NAME}] enable + start probe timer",
+    service=f"{AGENT_NAME}-slack-probe.timer",
+    running=True,
+    enabled=True,
 )
