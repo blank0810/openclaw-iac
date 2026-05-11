@@ -1,1 +1,5 @@
 pyinfra>=3,<4
+jinja2>=3
+pytest>=7
+pyyaml>=6
+tomli>=2

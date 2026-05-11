@@ -1,0 +1,16 @@
+# Tenant-level non-secret config. Copy to tenants/<name>/tenant.toml.
+
+# Display name shown in chat. Must match the Slack app's display name.
+agent_name = "Edgar"
+
+# Model + provider routing.
+zeroclaw_provider = "{{provider}}"   # anthropic or litellm
+zeroclaw_model = "claude-haiku-4-5"
+
+# Slack channel scoping.
+slack_mention_only = false
+slack_thread_replies = true
+slack_use_markdown_blocks = true
+slack_stream_drafts = false
+# slack_channel_id = "C01ABC123"     # optional - scope to one channel
+# slack_allowed_users = ["U01ABC"]   # optional - whitelist
