@@ -7,6 +7,10 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 
 SLUG_RE = re.compile(r"^agent-[a-z0-9]([a-z0-9-]{0,27}[a-z0-9])?$")
 
@@ -68,8 +72,32 @@ def _load_envs(repo_root: Path, slug: str) -> dict[str, str]:
                 continue
             key, _, val = line.partition("=")
             env[key.strip()] = val.strip().strip('"').strip("'")
+    tenant_toml = repo_root / "tenants" / slug / "tenant.toml"
+    if tenant_toml.exists():
+        cfg = tomllib.loads(tenant_toml.read_text())
+        mapping = {
+            "agent_name": "AGENT_NAME_DISPLAY",
+            "zeroclaw_provider": "ZEROCLAW_PROVIDER",
+            "zeroclaw_model": "ZEROCLAW_MODEL",
+            "slack_channel_id": "SLACK_CHANNEL_ID",
+            "slack_mention_only": "SLACK_MENTION_ONLY",
+            "slack_thread_replies": "SLACK_THREAD_REPLIES",
+            "slack_use_markdown_blocks": "SLACK_USE_MARKDOWN_BLOCKS",
+            "slack_stream_drafts": "SLACK_STREAM_DRAFTS",
+        }
+        for key, env_key in mapping.items():
+            if key in cfg:
+                env[env_key] = _env_value(cfg[key])
+        if "slack_allowed_users" in cfg:
+            env["SLACK_ALLOWED_USERS"] = _json.dumps(cfg["slack_allowed_users"])
     env["AGENT_NAME"] = slug
     return env
+
+
+def _env_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
 
 
 def cmd_init(args: argparse.Namespace, repo_root: Path) -> int:

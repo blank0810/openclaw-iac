@@ -4,7 +4,7 @@ try:
 except ImportError:
     import tomli as tomllib
 
-from agentctl import SlugError, init_tenant, main, validate_slug
+from agentctl import SlugError, _load_envs, init_tenant, main, validate_slug
 
 
 @pytest.mark.parametrize(
@@ -110,3 +110,27 @@ def test_list_json_with_no_tenants(monkeypatch, capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert captured.out.strip() == "[]"
+
+
+def test_load_envs_maps_tenant_toml_to_env(tmp_path):
+    repo_root = tmp_path
+    tenant_dir = repo_root / "tenants" / "agent-edgar"
+    tenant_dir.mkdir(parents=True)
+    (repo_root / ".env").write_text("TZ=UTC\nZEROCLAW_PROVIDER=anthropic\n")
+    (tenant_dir / ".env").write_text("ANTHROPIC_API_KEY=sk-test\n")
+    (tenant_dir / "tenant.toml").write_text(
+        'agent_name = "Edgar"\n'
+        'zeroclaw_provider = "litellm"\n'
+        'zeroclaw_model = "claude-haiku-4-5"\n'
+        "slack_mention_only = false\n"
+        "slack_allowed_users = [\"U01ABC\"]\n"
+    )
+
+    env = _load_envs(repo_root, "agent-edgar")
+
+    assert env["AGENT_NAME"] == "agent-edgar"
+    assert env["AGENT_NAME_DISPLAY"] == "Edgar"
+    assert env["ZEROCLAW_PROVIDER"] == "litellm"
+    assert env["ZEROCLAW_MODEL"] == "claude-haiku-4-5"
+    assert env["SLACK_MENTION_ONLY"] == "false"
+    assert env["SLACK_ALLOWED_USERS"] == '["U01ABC"]'
