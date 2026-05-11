@@ -134,3 +134,36 @@ def test_load_envs_maps_tenant_toml_to_env(tmp_path):
     assert env["ZEROCLAW_MODEL"] == "claude-haiku-4-5"
     assert env["SLACK_MENTION_ONLY"] == "false"
     assert env["SLACK_ALLOWED_USERS"] == '["U01ABC"]'
+
+
+def test_create_interactively_writes_config_and_secrets(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    inputs = iter(
+        [
+            "Edgar",
+            "litellm",
+            "claude-haiku-4-5",
+            "http://10.0.0.4:4000/v1",
+            "",
+            "default",
+            "n",
+        ]
+    )
+    secrets = iter(["xoxb-test", "xapp-test", "sk-litellm", ""])
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(inputs))
+    monkeypatch.setattr("getpass.getpass", lambda prompt="": next(secrets))
+
+    exit_code = main(["create", "agent-edgar"])
+
+    tenant_dir = tmp_path / "tenants" / "agent-edgar"
+    cfg = tomllib.loads((tenant_dir / "tenant.toml").read_text())
+    env_text = (tenant_dir / ".env").read_text()
+    assert exit_code == 0
+    assert cfg["agent_name"] == "Edgar"
+    assert cfg["zeroclaw_provider"] == "litellm"
+    assert cfg["zeroclaw_model"] == "claude-haiku-4-5"
+    assert "SLACK_BOT_TOKEN=xoxb-test" in env_text
+    assert "SLACK_APP_TOKEN=xapp-test" in env_text
+    assert "LITELLM_API_KEY=sk-litellm" in env_text
+    assert "COMPOSIO_ENTITY_ID=default" in env_text

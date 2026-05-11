@@ -1,6 +1,7 @@
 """agentctl - multi-tenant IaC CLI for ZeroClaw deployments."""
 
 import argparse
+import getpass
 import json as _json
 import os
 from pathlib import Path
@@ -47,6 +48,88 @@ def init_tenant(slug: str, *, repo_root: Path, provider: str) -> Path:
     (tenant_dir / ".env").write_text(env_file)
     (tenant_dir / ".env").chmod(0o600)
     return tenant_dir
+
+
+def create_tenant_interactive(slug: str, *, repo_root: Path) -> Path:
+    """Prompt for tenant settings and write tenant.toml plus .env."""
+    validate_slug(slug)
+    tenant_dir = repo_root / "tenants" / slug
+    if tenant_dir.exists():
+        raise FileExistsError(f"{tenant_dir} already exists")
+
+    default_display = _display_name_from_slug(slug)
+    display_name = _prompt("Display name", default_display)
+    provider = _prompt_choice("Provider", ["litellm", "anthropic"], "litellm")
+    model = _prompt("Model", "claude-haiku-4-5")
+
+    slack_bot_token = getpass.getpass("Slack bot token (xoxb-...): ").strip()
+    slack_app_token = getpass.getpass("Slack app token (xapp-...): ").strip()
+
+    anthropic_api_key = ""
+    litellm_base_url = ""
+    litellm_api_key = ""
+    if provider == "litellm":
+        litellm_base_url = _prompt("LiteLLM base URL", "http://10.0.0.4:4000/v1")
+        litellm_api_key = getpass.getpass("LiteLLM API key: ").strip()
+    else:
+        anthropic_api_key = getpass.getpass("Anthropic API key: ").strip()
+
+    composio_api_key = getpass.getpass("Composio API key (optional): ").strip()
+    composio_entity_id = _prompt("Composio entity ID", "default")
+
+    tenant_dir.mkdir(parents=True)
+    (tenant_dir / "tenant.toml").write_text(
+        "\n".join(
+            [
+                f'agent_name = "{display_name}"',
+                f'zeroclaw_provider = "{provider}"',
+                f'zeroclaw_model = "{model}"',
+                "",
+                "slack_mention_only = false",
+                "slack_thread_replies = true",
+                "slack_use_markdown_blocks = true",
+                "slack_stream_drafts = false",
+                "",
+            ]
+        )
+    )
+    (tenant_dir / ".env").write_text(
+        "\n".join(
+            [
+                "# Per-tenant secrets - NEVER commit.",
+                f"SLACK_BOT_TOKEN={slack_bot_token}",
+                f"SLACK_APP_TOKEN={slack_app_token}",
+                "SLACK_SIGNING_SECRET=",
+                "",
+                f"ANTHROPIC_API_KEY={anthropic_api_key}",
+                f"LITELLM_BASE_URL={litellm_base_url}",
+                f"LITELLM_API_KEY={litellm_api_key}",
+                "",
+                f"COMPOSIO_API_KEY={composio_api_key}",
+                f"COMPOSIO_ENTITY_ID={composio_entity_id}",
+                "",
+            ]
+        )
+    )
+    (tenant_dir / ".env").chmod(0o600)
+    return tenant_dir
+
+
+def _display_name_from_slug(slug: str) -> str:
+    return slug.removeprefix("agent-").replace("-", " ").title()
+
+
+def _prompt(label: str, default: str) -> str:
+    raw = input(f"{label} [{default}]: ").strip()
+    return raw or default
+
+
+def _prompt_choice(label: str, choices: list[str], default: str) -> str:
+    while True:
+        value = _prompt(f"{label} ({'/'.join(choices)})", default)
+        if value in choices:
+            return value
+        print(f"Please choose one of: {', '.join(choices)}", file=sys.stderr)
 
 
 def _pyinfra_cmd(task: str, agent_name: str, extra: list[str]) -> list[str]:
@@ -106,6 +189,22 @@ def cmd_init(args: argparse.Namespace, repo_root: Path) -> int:
         f"created tenants/{args.name}/. fill in .env, then run: "
         f"agentctl new {args.name}"
     )
+    return 0
+
+
+def cmd_create(args: argparse.Namespace, repo_root: Path) -> int:
+    try:
+        create_tenant_interactive(args.name, repo_root=repo_root)
+    except FileExistsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"created tenants/{args.name}/")
+    deploy_now = input("Deploy now? [y/N]: ").strip().lower()
+    if deploy_now in ("y", "yes"):
+        args.dry_run = False
+        return cmd_new(args, repo_root)
+    print(f"run when ready: scripts/agentctl new {args.name}")
     return 0
 
 
@@ -216,6 +315,9 @@ def main(argv: list[str] | None = None) -> int:
         "--provider", choices=["anthropic", "litellm"], default="anthropic"
     )
 
+    p_create = sub.add_parser("create")
+    p_create.add_argument("name")
+
     p_new = sub.add_parser("new")
     p_new.add_argument("name")
     p_new.add_argument("--dry-run", action="store_true")
@@ -237,6 +339,7 @@ def main(argv: list[str] | None = None) -> int:
 
     return {
         "init": cmd_init,
+        "create": cmd_create,
         "new": cmd_new,
         "remove": cmd_remove,
         "list": cmd_list,
