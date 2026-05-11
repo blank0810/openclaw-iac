@@ -1,6 +1,7 @@
 """agentctl - multi-tenant IaC CLI for ZeroClaw deployments."""
 
 import argparse
+import json as _json
 import os
 from pathlib import Path
 import re
@@ -112,7 +113,69 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path) -> int:
 
 
 def cmd_list(args: argparse.Namespace, repo_root: Path) -> int:
-    raise NotImplementedError("list not yet implemented")
+    """List deployed tenants by SSHing to the host and inspecting containers."""
+    server3_ip = os.environ.get("SERVER3_IP") or _read_env_var(
+        repo_root / ".env", "SERVER3_IP"
+    )
+    ssh_key = os.environ.get("SSH_KEY_PATH") or _read_env_var(
+        repo_root / ".env", "SSH_KEY_PATH"
+    )
+    ssh_port = (
+        os.environ.get("SSH_PORT")
+        or _read_env_var(repo_root / ".env", "SSH_PORT")
+        or "2222"
+    )
+    ssh_user = (
+        os.environ.get("SSH_USER")
+        or _read_env_var(repo_root / ".env", "SSH_USER")
+        or "overlord101"
+    )
+
+    cmd = [
+        "ssh",
+        "-i",
+        ssh_key,
+        "-p",
+        ssh_port,
+        "-o",
+        "ConnectTimeout=10",
+        f"{ssh_user}@{server3_ip}",
+        "sudo docker ps -a --filter name='^agent-' "
+        "--format '{{.Names}}|{{.Status}}|{{.Image}}'",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        print(f"ssh failed: {result.stderr.strip()}", file=sys.stderr)
+        return 1
+
+    rows = []
+    for line in result.stdout.strip().splitlines():
+        if not line:
+            continue
+        name, status, image = line.split("|", 2)
+        rows.append({"name": name, "status": status, "image": image})
+
+    if args.json:
+        print(_json.dumps(rows, indent=2))
+    else:
+        if not rows:
+            print("no tenants deployed")
+            return 0
+        w_name = max(len(row["name"]) for row in rows)
+        w_stat = max(len(row["status"]) for row in rows)
+        for row in rows:
+            print(f"{row['name']:<{w_name}}  {row['status']:<{w_stat}}  {row['image']}")
+    return 0
+
+
+def _read_env_var(env_file: Path, key: str) -> str | None:
+    if not env_file.exists():
+        return None
+    for raw_line in env_file.read_text().splitlines():
+        line = raw_line.strip()
+        if line.startswith(f"{key}="):
+            return line.partition("=")[2].strip().strip('"').strip("'")
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -91,3 +91,22 @@ def test_invalid_slug_exits_nonzero(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     exit_code = main(["new", "edgar"])
     assert exit_code != 0
+
+
+def test_list_json_with_no_tenants(monkeypatch, capsys, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(
+        "SERVER3_IP=1.2.3.4\n"
+        "SSH_KEY_PATH=./key.pem\n"
+    )
+
+    def fake_run(*args, **kwargs):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    exit_code = main(["list", "--json"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == "[]"
