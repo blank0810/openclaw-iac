@@ -87,6 +87,12 @@ def test_new_requires_tenant_dir(tmp_path, monkeypatch):
     assert exit_code != 0
 
 
+def test_deploy_alias_requires_tenant_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    exit_code = main(["deploy", "agent-missing"])
+    assert exit_code != 0
+
+
 def test_invalid_slug_exits_nonzero(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     exit_code = main(["new", "edgar"])

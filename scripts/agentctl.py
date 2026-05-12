@@ -322,6 +322,10 @@ def main(argv: list[str] | None = None) -> int:
     p_new.add_argument("name")
     p_new.add_argument("--dry-run", action="store_true")
 
+    p_deploy = sub.add_parser("deploy")
+    p_deploy.add_argument("name")
+    p_deploy.add_argument("--dry-run", action="store_true")
+
     p_remove = sub.add_parser("remove")
     p_remove.add_argument("name")
 
@@ -341,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         "init": cmd_init,
         "create": cmd_create,
         "new": cmd_new,
+        "deploy": cmd_new,
         "remove": cmd_remove,
         "list": cmd_list,
     }[args.cmd](args, repo_root)
