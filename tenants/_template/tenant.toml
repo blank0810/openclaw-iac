@@ -1,0 +1,36 @@
+# Copy this file to tenants/<slug>/tenant.toml and fill in real values.
+
+[identity]
+name = "REPLACE_ME"
+display_name = "REPLACE_ME Assistant"
+enabled = true
+state_dir = "REPLACE_ME"
+
+[runtime]
+# Leave image empty to use ZEROCLAW_IMAGE from .env
+# image = ""
+host_port = 0    # 0 = no host port exposed (default)
+
+[llm]
+provider = "anthropic"
+model = "claude-sonnet-4-5"
+api_key = ""     # SECRET - never lands in remote config.toml
+timeout_secs = 60
+
+[slack]
+enabled = false
+bot_token = ""
+app_token = ""
+signing_secret = ""
+
+[composio]
+enabled = false
+api_key = ""
+allowed_tools = []
+
+[exec]
+enabled = false
+
+[policy]
+require_approval_for = []
+denied_domains = []
