@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.config import LlmConfig, TenantDefinition
+from lib.config import DeploymentConfig, LlmConfig, TenantDefinition, load_config
 from lib.config import ComposioConfig, PolicyConfig, SlackConfig
 
 
@@ -117,3 +117,124 @@ def test_tenant_definition_rejects_port_above_65535():
 def test_tenant_definition_zero_port_means_no_expose():
     t = _make_tenant(host_port=0)
     assert t.host_port == 0
+
+
+def _write_env(tmp_path: Path, **overrides) -> Path:
+    defaults = dict(
+        SERVER_HOST="1.2.3.4",
+        DEPLOY_USER="overlord101",
+        SSH_PORT="2222",
+        DEPLOY_SSH_KEY_PATH=str(tmp_path / "fake-deploy.pem"),
+        ROOT_SSH_KEY_PATH=str(tmp_path / "fake-root.pem"),
+        ZEROCLAW_IMAGE="ghcr.io/example/zeroclaw:1.0",
+    )
+    defaults.update(overrides)
+    env = tmp_path / ".env"
+    env.write_text("\n".join(f"{k}={v}" for k, v in defaults.items()))
+    (tmp_path / "fake-deploy.pem").write_text("")
+    (tmp_path / "fake-root.pem").write_text("")
+    return env
+
+
+def _write_tenant(tmp_path: Path, slug: str, **overrides) -> Path:
+    tenants_dir = tmp_path / "tenants" / slug
+    (tenants_dir / "workspace").mkdir(parents=True)
+    body_overrides = overrides.copy()
+    enabled = body_overrides.pop("enabled", True)
+    state_dir = body_overrides.pop("state_dir", slug)
+    host_port = body_overrides.pop("host_port", 0)
+    body = f"""
+[identity]
+name = "{slug}"
+display_name = "{slug.title()}"
+enabled = {str(enabled).lower()}
+state_dir = "{state_dir}"
+
+[runtime]
+host_port = {host_port}
+
+[llm]
+provider = "anthropic"
+model = "claude-sonnet-4-5"
+api_key = "sk-ant-{slug}"
+timeout_secs = 60
+
+[slack]
+enabled = false
+bot_token = ""
+app_token = ""
+signing_secret = ""
+
+[composio]
+enabled = false
+api_key = ""
+allowed_tools = []
+
+[exec]
+enabled = false
+
+[policy]
+require_approval_for = []
+denied_domains = []
+"""
+    (tenants_dir / "tenant.toml").write_text(body)
+    return tenants_dir
+
+
+def test_load_config_with_no_tenants(tmp_path, isolated_env):
+    _write_env(tmp_path)
+    cfg = load_config(project_root=tmp_path)
+    assert isinstance(cfg, DeploymentConfig)
+    assert cfg.server_host == "1.2.3.4"
+    assert cfg.tenants == ()
+
+
+def test_load_config_reads_one_tenant(tmp_path, isolated_env):
+    _write_env(tmp_path)
+    _write_tenant(tmp_path, "acme")
+    cfg = load_config(project_root=tmp_path)
+    assert len(cfg.tenants) == 1
+    assert cfg.tenants[0].name == "acme"
+
+
+def test_load_config_skips_underscore_prefixed_dirs(tmp_path, isolated_env):
+    _write_env(tmp_path)
+    _write_tenant(tmp_path, "acme")
+    (tmp_path / "tenants" / "_template").mkdir()
+    (tmp_path / "tenants" / "_template" / "tenant.toml").write_text("# template")
+    cfg = load_config(project_root=tmp_path)
+    assert [t.name for t in cfg.tenants] == ["acme"]
+
+
+def test_load_config_rejects_duplicate_state_dirs(tmp_path, isolated_env):
+    _write_env(tmp_path)
+    _write_tenant(tmp_path, "acme", state_dir="shared")
+    _write_tenant(tmp_path, "globex", state_dir="shared")
+    with pytest.raises(ValueError, match="state_dir"):
+        load_config(project_root=tmp_path)
+
+
+def test_load_config_rejects_duplicate_nonzero_host_ports(tmp_path, isolated_env):
+    _write_env(tmp_path)
+    _write_tenant(tmp_path, "acme", host_port=18791)
+    _write_tenant(tmp_path, "globex", host_port=18791)
+    with pytest.raises(ValueError, match="host_port"):
+        load_config(project_root=tmp_path)
+
+
+def test_load_config_allows_multiple_zero_ports(tmp_path, isolated_env):
+    _write_env(tmp_path)
+    _write_tenant(tmp_path, "acme", host_port=0)
+    _write_tenant(tmp_path, "globex", host_port=0)
+    cfg = load_config(project_root=tmp_path)
+    assert len(cfg.tenants) == 2
+
+
+def test_load_config_effective_tcp_ports_includes_ssh_and_tenants(tmp_path, isolated_env):
+    _write_env(tmp_path)
+    _write_tenant(tmp_path, "acme", host_port=18791)
+    _write_tenant(tmp_path, "globex", host_port=18792)
+    cfg = load_config(project_root=tmp_path)
+    assert 2222 in cfg.effective_tcp_ports
+    assert 18791 in cfg.effective_tcp_ports
+    assert 18792 in cfg.effective_tcp_ports

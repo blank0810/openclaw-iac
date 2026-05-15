@@ -3,6 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
+try:
+    import tomllib
+except ImportError:  # pragma: no cover - Python 3.10 compatibility
+    import tomli as tomllib
+
+from dotenv import dotenv_values
 
 
 VALID_LLM_PROVIDERS = ("anthropic", "litellm")
@@ -78,3 +84,123 @@ class TenantDefinition:
             )
         if self.host_port < 0 or self.host_port > 65535:
             raise ValueError(f"host_port must be 0..65535, got {self.host_port}")
+
+
+@dataclass(frozen=True)
+class DeploymentConfig:
+    server_host: str
+    deploy_user: str
+    ssh_port: int
+    deploy_ssh_key_path: Path
+    root_ssh_key_path: Path
+    zeroclaw_image: str
+    tenants: tuple[TenantDefinition, ...]
+    effective_tcp_ports: tuple[int, ...]
+
+
+def _parse_tenant_toml(path: Path) -> TenantDefinition:
+    raw = tomllib.loads(path.read_text())
+    identity = raw.get("identity", {})
+    runtime = raw.get("runtime", {})
+    llm = raw.get("llm", {})
+    slack = raw.get("slack", {})
+    composio = raw.get("composio", {})
+    exec_ = raw.get("exec", {})
+    policy = raw.get("policy", {})
+    name = identity["name"]
+    image = runtime.get("image") or None
+    return TenantDefinition(
+        name=name,
+        display_name=identity.get("display_name", name),
+        enabled=bool(identity.get("enabled", True)),
+        state_dir=identity.get("state_dir", name),
+        image=image,
+        host_port=int(runtime.get("host_port", 0)),
+        llm=LlmConfig(
+            provider=llm.get("provider", "anthropic"),
+            model=llm["model"],
+            api_key=llm.get("api_key", ""),
+            timeout_secs=int(llm.get("timeout_secs", 60)),
+        ),
+        slack=SlackConfig(
+            enabled=bool(slack.get("enabled", False)),
+            bot_token=slack.get("bot_token", ""),
+            app_token=slack.get("app_token", ""),
+            signing_secret=slack.get("signing_secret", ""),
+        ),
+        composio=ComposioConfig(
+            enabled=bool(composio.get("enabled", False)),
+            api_key=composio.get("api_key", ""),
+            allowed_tools=tuple(composio.get("allowed_tools", ())),
+        ),
+        exec_enabled=bool(exec_.get("enabled", False)),
+        policy=PolicyConfig(
+            require_approval_for=tuple(policy.get("require_approval_for", ())),
+            denied_domains=tuple(policy.get("denied_domains", ())),
+        ),
+        workspace_dir=path.parent / "workspace",
+        tenant_toml_path=path,
+    )
+
+
+def load_config(project_root: Path | None = None) -> DeploymentConfig:
+    project_root = Path(project_root) if project_root else Path.cwd()
+    env = dotenv_values(project_root / ".env")
+    server_host = str(env["SERVER_HOST"])
+    deploy_user = str(env.get("DEPLOY_USER", "overlord101"))
+    ssh_port = int(str(env.get("SSH_PORT", "2222")))
+    deploy_ssh_key_path = Path(str(env["DEPLOY_SSH_KEY_PATH"]))
+    root_ssh_key_path = Path(str(env["ROOT_SSH_KEY_PATH"]))
+    zeroclaw_image = str(env["ZEROCLAW_IMAGE"])
+
+    tenants_dir = project_root / "tenants"
+    tenant_list: list[TenantDefinition] = []
+    if tenants_dir.is_dir():
+        for child in sorted(tenants_dir.iterdir()):
+            if not child.is_dir() or child.name.startswith("_"):
+                continue
+            toml_path = child / "tenant.toml"
+            if not toml_path.exists():
+                continue
+            tenant_list.append(_parse_tenant_toml(toml_path))
+
+    _validate_uniqueness(tenant_list)
+
+    effective_ports = {ssh_port}
+    for tenant in tenant_list:
+        if tenant.enabled and tenant.host_port:
+            effective_ports.add(tenant.host_port)
+
+    return DeploymentConfig(
+        server_host=server_host,
+        deploy_user=deploy_user,
+        ssh_port=ssh_port,
+        deploy_ssh_key_path=deploy_ssh_key_path,
+        root_ssh_key_path=root_ssh_key_path,
+        zeroclaw_image=zeroclaw_image,
+        tenants=tuple(tenant_list),
+        effective_tcp_ports=tuple(sorted(effective_ports)),
+    )
+
+
+def _validate_uniqueness(tenants: list[TenantDefinition]) -> None:
+    seen_names: dict[str, str] = {}
+    seen_state_dirs: dict[str, str] = {}
+    seen_ports: dict[int, str] = {}
+    for tenant in tenants:
+        if tenant.name in seen_names:
+            raise ValueError(f"duplicate tenant name {tenant.name!r}")
+        seen_names[tenant.name] = tenant.name
+        if tenant.state_dir in seen_state_dirs:
+            raise ValueError(
+                f"duplicate state_dir {tenant.state_dir!r} "
+                f"between {seen_state_dirs[tenant.state_dir]} and {tenant.name}"
+            )
+        seen_state_dirs[tenant.state_dir] = tenant.name
+        if tenant.enabled and tenant.host_port:
+            if tenant.host_port in seen_ports:
+                raise ValueError(
+                    f"duplicate host_port {tenant.host_port} "
+                    f"between {seen_ports[tenant.host_port]} and {tenant.name}"
+                )
+            seen_ports[tenant.host_port] = tenant.name
