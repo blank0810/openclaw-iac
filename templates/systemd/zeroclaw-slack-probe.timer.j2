@@ -1,0 +1,14 @@
+[Unit]
+Description=Run ZeroClaw Slack liveness probe for {{ tenant.name }} every 3 minutes
+After=docker.service
+Requires=docker.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+RandomizedDelaySec=15s
+Unit=zeroclaw-slack-probe-{{ tenant.name }}.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target

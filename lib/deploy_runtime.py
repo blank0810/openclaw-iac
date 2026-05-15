@@ -3,6 +3,8 @@ from __future__ import annotations
 from pyinfra import host
 from pyinfra.operations import apt, files, server, systemd
 
+from lib.slack_probe import install_probes
+
 
 deploy_user = host.data.deploy_user
 remote_base_dir = host.data.get("remote_base_dir", "/opt/zeroclaw")
@@ -115,6 +117,8 @@ for tenant in tenants:
         name=f"Pull image for {tenant['name']}",
         commands=[f"cd {remote_base_dir} && docker pull {tenant['image']}"],
     )
+
+install_probes(tenants)
 
 systemd.service(
     name="Enable and start Docker service",
