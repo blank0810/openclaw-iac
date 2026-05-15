@@ -2,6 +2,8 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> Note: terminology was later changed `tenant` -> `agent` to match nanobot conventions. Read with that substitution.
+
 **Goal:** Rewrite `infra/` + `scripts/agentctl.py` into a nanobot-shaped single-CLI infrastructure tool (`zeroclawctl`) for the ZeroClaw runtime, with typed config, env-only secrets, bidirectional state sync, and AGENT_CHECKLIST-mapped SECURITY.md.
 
 **Architecture:** Single Python CLI (`zeroclawctl.py`) drives Pyinfra as a library (not a shell-out). Typed `DeploymentConfig` / `TenantDefinition` dataclasses are the single source of truth; one `load_config()` validates and feeds every subcommand and every Pyinfra deploy file. Per-tenant state lives under `/opt/zeroclaw/states/<slug>/` with secrets isolated to `zeroclaw.env` (chmod 0600) and zero secrets in `config.toml`. Per-tenant Docker bridge networks preserve isolation under a single shared compose file.

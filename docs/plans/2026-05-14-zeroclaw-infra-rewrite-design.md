@@ -4,6 +4,8 @@
 **Status:** Validated, ready for implementation planning
 **Scope:** Full ground-up rewrite of `infra/` + `scripts/agentctl.py` into a nanobot-shaped, single-CLI infrastructure tool for the ZeroClaw runtime.
 
+> Note: terminology was later changed `tenant` -> `agent` to match nanobot conventions. Read with that substitution.
+
 ## Background
 
 A council review (lead-engineer + zeroclaw-engineer) compared our current `infra/` against the
