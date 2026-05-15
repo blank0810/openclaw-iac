@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import subprocess
 
-from lib.tenants import cmd_deploy
-from tests.test_config import _write_env, _write_tenant
+from lib.agents import cmd_deploy
+from tests.test_config import _write_env, _write_agent
 
 
 def test_cmd_deploy_renders_uploads_and_recreates(tmp_path, isolated_env, monkeypatch):
     _write_env(tmp_path)
-    _write_tenant(tmp_path, "acme")
+    _write_agent(tmp_path, "acme")
     calls: list[list[str]] = []
 
     def fake_run(args, **kwargs):

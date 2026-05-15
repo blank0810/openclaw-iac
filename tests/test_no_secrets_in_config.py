@@ -5,8 +5,8 @@ import pytest
 from jinja2 import Environment, FileSystemLoader
 
 from lib.config import ComposioConfig, LlmConfig, SlackConfig
-from lib.tenant_env import build_tenant_env
-from tests.test_tenant_env import _tenant
+from lib.agent_env import build_agent_env
+from tests.test_agent_env import _agent
 
 
 @pytest.fixture
@@ -14,8 +14,8 @@ def env():
     return Environment(loader=FileSystemLoader("templates"))
 
 
-def _all_secrets_tenant():
-    return _tenant(
+def _all_secrets_agent():
+    return _agent(
         llm=LlmConfig(
             provider="anthropic",
             model="claude-sonnet-4-5",
@@ -38,7 +38,7 @@ def _all_secrets_tenant():
 
 def test_no_api_key_in_config_toml_output(env):
     out = env.get_template("config.toml.j2").render(
-        tenant=_all_secrets_tenant(), exec_deny_patterns=[]
+        agent=_all_secrets_agent(), exec_deny_patterns=[]
     )
     for needle in (
         "sk-ant-LEAK",
@@ -53,7 +53,7 @@ def test_no_api_key_in_config_toml_output(env):
 
 
 def test_secrets_present_in_env_dict():
-    env_dict = build_tenant_env(_all_secrets_tenant())
+    env_dict = build_agent_env(_all_secrets_agent())
     assert env_dict["ANTHROPIC_API_KEY"] == "sk-ant-LEAK"
     assert env_dict["SLACK_BOT_TOKEN"] == "xoxb-LEAK"
     assert env_dict["COMPOSIO_API_KEY"] == "comp-LEAK"

@@ -1,18 +1,18 @@
 [Unit]
-Description=ZeroClaw Slack liveness probe for {{ tenant.name }}
+Description=ZeroClaw Slack liveness probe for {{ agent.name }}
 After=docker.service
 Wants=docker.service
 ConditionPathExists=/opt/zeroclaw/bin/zeroclaw-slack-probe.sh
 
 [Service]
 Type=oneshot
-EnvironmentFile=/opt/zeroclaw/states/{{ tenant.state_dir }}/zeroclaw.env
-Environment="CONTAINER_NAME=zeroclaw-{{ tenant.name }}"
-Environment="PROBE_STATE_DIR=/var/lib/zeroclaw-probe/{{ tenant.name }}"
-Environment="PROBE_LOG_FILE=/var/log/zeroclaw-probe-{{ tenant.name }}.log"
+EnvironmentFile=/opt/zeroclaw/states/{{ agent.state_dir }}/zeroclaw.env
+Environment="CONTAINER_NAME=zeroclaw-{{ agent.name }}"
+Environment="PROBE_STATE_DIR=/var/lib/zeroclaw-probe/{{ agent.name }}"
+Environment="PROBE_LOG_FILE=/var/log/zeroclaw-probe-{{ agent.name }}.log"
 ExecStart=/opt/zeroclaw/bin/zeroclaw-slack-probe.sh
 ProtectSystem=strict
-ReadWritePaths=/var/lib/zeroclaw-probe /var/log/zeroclaw-probe-{{ tenant.name }}.log
+ReadWritePaths=/var/lib/zeroclaw-probe /var/log/zeroclaw-probe-{{ agent.name }}.log
 ProtectHome=yes
 PrivateTmp=yes
 NoNewPrivileges=yes

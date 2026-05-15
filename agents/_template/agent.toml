@@ -1,4 +1,4 @@
-# Copy this file to tenants/<slug>/tenant.toml and fill in real values.
+# Copy this file to agents/<slug>/agent.toml and fill in real values.
 
 [identity]
 name = "REPLACE_ME"

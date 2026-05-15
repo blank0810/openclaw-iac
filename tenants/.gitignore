@@ -1,7 +1,0 @@
-# Tenant secrets - never commit
-*/.env
-*/.env.bak-*
-
-# Allow non-secret tenant config
-!*/tenant.toml
-!_template/

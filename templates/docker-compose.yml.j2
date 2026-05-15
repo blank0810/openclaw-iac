@@ -1,14 +1,14 @@
 services:
-{% for t in config.tenants if t.enabled %}
-  {{ t.name }}:
-    image: {{ t.image or config.zeroclaw_image }}
-    container_name: zeroclaw-{{ t.name }}
+{% for a in config.agents if a.enabled %}
+  {{ a.name }}:
+    image: {{ a.image or config.zeroclaw_image }}
+    container_name: zeroclaw-{{ a.name }}
     restart: unless-stopped
     env_file:
-      - ./states/{{ t.state_dir }}/zeroclaw.env
+      - ./states/{{ a.state_dir }}/zeroclaw.env
     volumes:
-      - ./states/{{ t.state_dir }}/config.toml:/zeroclaw/config.toml:ro
-      - ./states/{{ t.state_dir }}/workspace:/zeroclaw/workspace
+      - ./states/{{ a.state_dir }}/config.toml:/zeroclaw/config.toml:ro
+      - ./states/{{ a.state_dir }}/workspace:/zeroclaw/workspace
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
@@ -17,12 +17,12 @@ services:
     security_opt:
       - no-new-privileges:true
     user: "65534:65534"
-{% if t.host_port %}
+{% if a.host_port %}
     ports:
-      - "127.0.0.1:{{ t.host_port }}:42617"
+      - "127.0.0.1:{{ a.host_port }}:42617"
 {% endif %}
     networks:
-      - zc-{{ t.name }}
+      - zc-{{ a.name }}
     deploy:
       resources:
         limits:
@@ -41,7 +41,7 @@ services:
 {% endfor %}
 
 networks:
-{% for t in config.tenants if t.enabled %}
-  zc-{{ t.name }}:
+{% for a in config.agents if a.enabled %}
+  zc-{{ a.name }}:
     driver: bridge
 {% endfor %}

@@ -11,7 +11,7 @@ is:
 - `calculator`
 - `glob_search`
 - `content_search`
-{%- if tenant.composio.enabled %}
+{%- if agent.composio.enabled %}
 - `composio__COMPOSIO_SEARCH_TOOLS`
 - `composio__COMPOSIO_GET_TOOL_SCHEMAS`
 - `composio__COMPOSIO_MANAGE_CONNECTIONS`
@@ -26,7 +26,7 @@ Anything not in that list - including `file_write`, `shell`,
 scheduler/cron edits, or config mutations - requires explicit
 operator approval **per invocation** under supervised mode.
 
-{% if tenant.composio.enabled -%}
+{% if agent.composio.enabled -%}
 ## Composio MCP Tools
 
 The Composio MCP meta-tools above are pre-cleared so headless

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import getpass
 import json
+import shlex
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from lib.config import load_config
+from lib.config import DeploymentConfig, load_config
+
+AUDIT_LOG_PATH = "/opt/zeroclaw/audit.log"
 
 
 def _format_ts(ts: datetime | None) -> str:
@@ -21,7 +24,7 @@ def format_audit_line(
     *,
     actor: str,
     cmd: str,
-    tenant: str | None,
+    agent: str | None,
     image: str | None,
     result: str,
     ts: datetime | None = None,
@@ -32,7 +35,7 @@ def format_audit_line(
                 "ts": _format_ts(ts),
                 "actor": actor,
                 "cmd": cmd,
-                "tenant": tenant,
+                "agent": agent,
                 "image": image,
                 "result": result,
             },
@@ -42,16 +45,49 @@ def format_audit_line(
     )
 
 
+def append_audit_line(
+    cfg: DeploymentConfig,
+    *,
+    actor: str,
+    cmd: str,
+    agent: str | None,
+    image: str | None,
+    result: str,
+) -> None:
+    """Append a JSONL audit record to the remote audit log.
+
+    Failure is swallowed: audit-log failures must never fail the parent command.
+    """
+    line = format_audit_line(
+        actor=actor, cmd=cmd, agent=agent, image=image, result=result
+    )
+    payload = line.rstrip("\n")
+    remote_cmd = f"printf '%s\\n' {shlex.quote(payload)} >> {AUDIT_LOG_PATH}"
+    try:
+        subprocess.run(
+            [
+                "ssh",
+                "-p",
+                str(cfg.ssh_port),
+                f"{cfg.deploy_user}@{cfg.server_host}",
+                remote_cmd,
+            ],
+            check=False,
+        )
+    except Exception:
+        return
+
+
 def cmd_audit(
     *,
-    tenant: str | None = None,
+    agent: str | None = None,
     since: str | None = None,
     project_root: Path | None = None,
 ) -> int:
     cfg = load_config(project_root)
     command = "cat /opt/zeroclaw/audit.log"
-    if tenant:
-        command += f" | grep '\"tenant\": \"{tenant}\"' || true"
+    if agent:
+        command += f" | grep '\"agent\": \"{agent}\"' || true"
     if since:
         command += f" | awk '$0 >= \"{since}\"'"
     return subprocess.run(

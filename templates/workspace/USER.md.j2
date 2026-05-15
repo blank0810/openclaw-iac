@@ -5,7 +5,7 @@
 The operator is a solo developer based in the Philippines, running
 Cloudesk - a small infrastructure operation built on Hetzner Cloud.
 They are the sole administrator and the only authorized user of this
-{{ tenant.display_name }} instance unless they explicitly add others through the
+{{ agent.display_name }} instance unless they explicitly add others through the
 runtime config.
 
 ## Environment
@@ -13,7 +13,7 @@ runtime config.
 - Linux (Ubuntu) workstation as their daily driver.
 - Hetzner VPS fleet; the host you run on is "Server 3", a hardened
   Docker host. Servers 1 and 2 host the operator's Ollama models and
-  a LiteLLM proxy that other Cloudesk apps use{% if tenant.llm.provider == "litellm" %} - you currently
+  a LiteLLM proxy that other Cloudesk apps use{% if agent.llm.provider == "litellm" %} - you currently
   route every model call through the LiteLLM proxy on Server 2{% else %} - you currently
   call Anthropic directly and do **not** route through them{% endif %}.
 - Git workflow: feature branches -> PRs -> main. They prefer small,

@@ -6,20 +6,20 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from lib.config import DeploymentConfig, SLUG_PATTERN, TenantDefinition, load_config
+from lib.config import AgentDefinition, DeploymentConfig, SLUG_PATTERN, load_config
 from lib.config_patch import default_exec_deny_patterns
 from lib.managed_policy import build_policy_block, inject_policy_block
-from lib.tenant_env import build_tenant_env
+from lib.agent_env import build_agent_env
 
 
 REMOTE_BASE = "/opt/zeroclaw"
 
 
-def _tenant_by_name(cfg: DeploymentConfig, name: str) -> TenantDefinition:
-    for tenant in cfg.tenants:
-        if tenant.name == name:
-            return tenant
-    raise ValueError(f"unknown tenant {name!r}")
+def _agent_by_name(cfg: DeploymentConfig, name: str) -> AgentDefinition:
+    for agent in cfg.agents:
+        if agent.name == name:
+            return agent
+    raise ValueError(f"unknown agent {name!r}")
 
 
 def _ssh_base(cfg: DeploymentConfig) -> list[str]:
@@ -61,37 +61,37 @@ def _template_env(project_root: Path) -> Environment:
 def cmd_create(name: str, project_root: Path | None = None) -> int:
     project_root = Path(project_root) if project_root else Path.cwd()
     if not SLUG_PATTERN.match(name):
-        print(f"invalid tenant slug: {name}")
+        print(f"invalid agent slug: {name}")
         return 1
-    src = project_root / "tenants" / "_template"
-    dest = project_root / "tenants" / name
+    src = project_root / "agents" / "_template"
+    dest = project_root / "agents" / name
     if dest.exists():
-        print(f"tenant already exists: {name}")
+        print(f"agent already exists: {name}")
         return 1
     shutil.copytree(src, dest)
-    tenant_toml = dest / "tenant.toml"
-    if tenant_toml.exists():
-        tenant_toml.write_text(tenant_toml.read_text().replace("REPLACE_ME", name))
+    agent_toml = dest / "agent.toml"
+    if agent_toml.exists():
+        agent_toml.write_text(agent_toml.read_text().replace("REPLACE_ME", name))
     return 0
 
 
 def cmd_deploy(name: str, project_root: Path | None = None, pull_image: bool = False) -> int:
     project_root = Path(project_root) if project_root else Path.cwd()
     cfg = load_config(project_root)
-    tenant = _tenant_by_name(cfg, name)
+    agent = _agent_by_name(cfg, name)
     env = _template_env(project_root)
-    staged = project_root / ".runtime-temp" / tenant.name
+    staged = project_root / ".runtime-temp" / agent.name
     staged.mkdir(parents=True, exist_ok=True)
 
-    env_text = env.get_template("zeroclaw.env.j2").render(env=build_tenant_env(tenant))
+    env_text = env.get_template("zeroclaw.env.j2").render(env=build_agent_env(agent))
     config_text = env.get_template("config.toml.j2").render(
-        tenant=tenant,
+        agent=agent,
         exec_deny_patterns=default_exec_deny_patterns(),
     )
     (staged / "zeroclaw.env").write_text(env_text)
     (staged / "config.toml").write_text(config_text)
 
-    remote_state = f"{REMOTE_BASE}/states/{tenant.state_dir}"
+    remote_state = f"{REMOTE_BASE}/states/{agent.state_dir}"
     _ssh(cfg, f"mkdir -p {remote_state}/workspace {remote_state}/workspace/sessions")
     _scp_to(cfg, staged / "zeroclaw.env", f"{remote_state}/zeroclaw.env")
     _scp_to(cfg, staged / "config.toml", f"{remote_state}/config.toml")
@@ -103,17 +103,17 @@ def cmd_deploy(name: str, project_root: Path | None = None, pull_image: bool = F
         capture=True,
     ).stdout
     policy = build_policy_block(
-        approval_gates=tenant.policy.require_approval_for,
-        denied_domains=tenant.policy.denied_domains,
+        approval_gates=agent.policy.require_approval_for,
+        denied_domains=agent.policy.denied_domains,
     )
     (staged / "AGENTS.md").write_text(inject_policy_block(existing_agents or "", policy))
     _scp_to(cfg, staged / "AGENTS.md", f"{remote_state}/workspace/AGENTS.md")
 
     if pull_image:
-        _ssh(cfg, f"cd {REMOTE_BASE} && docker pull {tenant.image or cfg.zeroclaw_image}")
+        _ssh(cfg, f"cd {REMOTE_BASE} && docker pull {agent.image or cfg.zeroclaw_image}")
     return _ssh(
         cfg,
-        f"cd {REMOTE_BASE} && docker compose up -d --force-recreate {tenant.name}",
+        f"cd {REMOTE_BASE} && docker compose up -d --force-recreate {agent.name}",
     ).returncode
 
 
@@ -159,11 +159,11 @@ def cmd_remove(name: str, project_root: Path | None = None) -> int:
 
 def cmd_fetch(name: str, project_root: Path | None = None, force: bool = False) -> int:
     cfg = load_config(project_root)
-    tenant = _tenant_by_name(cfg, name)
+    agent = _agent_by_name(cfg, name)
     project_root = Path(project_root) if project_root else Path.cwd()
-    dest = project_root / "tenants" / name
+    dest = project_root / "agents" / name
     if dest.exists() and not force:
-        print(f"local tenant exists: {name}; use force to overwrite")
+        print(f"local agent exists: {name}; use force to overwrite")
         return 1
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "workspace").mkdir(exist_ok=True)
@@ -173,7 +173,7 @@ def cmd_fetch(name: str, project_root: Path | None = None, force: bool = False) 
             "-P",
             str(cfg.ssh_port),
             "-r",
-            f"{cfg.deploy_user}@{cfg.server_host}:{REMOTE_BASE}/states/{tenant.state_dir}/workspace/*.md",
+            f"{cfg.deploy_user}@{cfg.server_host}:{REMOTE_BASE}/states/{agent.state_dir}/workspace/*.md",
             str(dest / "workspace"),
         ],
         check=False,

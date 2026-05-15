@@ -8,7 +8,7 @@ from lib.slack_probe import install_probes
 
 deploy_user = host.data.deploy_user
 remote_base_dir = host.data.get("remote_base_dir", "/opt/zeroclaw")
-tenants = host.data.get("tenants", ())
+agents = host.data.get("agents", ())
 
 
 server.shell(
@@ -84,14 +84,14 @@ for path in (remote_base_dir, f"{remote_base_dir}/states", f"{remote_base_dir}/.
         _sudo=True,
     )
 
-for tenant in tenants:
-    state_dir = tenant["state_dir"]
+for agent in agents:
+    state_dir = agent["state_dir"]
     for relpath in ("", "workspace", "workspace/sessions", "workspace/sessions/archive"):
         path = f"{remote_base_dir}/states/{state_dir}"
         if relpath:
             path = f"{path}/{relpath}"
         files.directory(
-            name=f"Ensure tenant directory {path}",
+            name=f"Ensure agent directory {path}",
             path=path,
             present=True,
             user="65534" if relpath.startswith("workspace") else deploy_user,
@@ -110,15 +110,15 @@ files.template(
     _sudo=True,
 )
 
-for tenant in tenants:
-    if not tenant["enabled"]:
+for agent in agents:
+    if not agent["enabled"]:
         continue
     server.shell(
-        name=f"Pull image for {tenant['name']}",
-        commands=[f"cd {remote_base_dir} && docker pull {tenant['image']}"],
+        name=f"Pull image for {agent['name']}",
+        commands=[f"cd {remote_base_dir} && docker pull {agent['image']}"],
     )
 
-install_probes(tenants)
+install_probes(agents)
 
 systemd.service(
     name="Enable and start Docker service",

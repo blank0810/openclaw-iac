@@ -3,16 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from lib.config import (
+    AgentDefinition,
     ComposioConfig,
     LlmConfig,
     PolicyConfig,
     SlackConfig,
-    TenantDefinition,
 )
-from lib.tenant_env import build_tenant_env
+from lib.agent_env import build_agent_env
 
 
-def _tenant(**overrides):
+def _agent(**overrides):
     defaults = dict(
         name="acme",
         display_name="Acme",
@@ -31,20 +31,20 @@ def _tenant(**overrides):
         exec_enabled=False,
         policy=PolicyConfig(require_approval_for=(), denied_domains=()),
         workspace_dir=Path("/tmp/x"),
-        tenant_toml_path=Path("/tmp/x.toml"),
+        agent_toml_path=Path("/tmp/x.toml"),
     )
     defaults.update(overrides)
-    return TenantDefinition(**defaults)
+    return AgentDefinition(**defaults)
 
 
 def test_anthropic_provider_sets_anthropic_api_key():
-    env = build_tenant_env(_tenant())
+    env = build_agent_env(_agent())
     assert env["ANTHROPIC_API_KEY"] == "sk-ant-SECRET"
     assert "LITELLM_API_KEY" not in env
 
 
 def test_litellm_provider_sets_litellm_api_key():
-    tenant = _tenant(
+    agent = _agent(
         llm=LlmConfig(
             provider="litellm",
             model="gpt-4o",
@@ -52,18 +52,18 @@ def test_litellm_provider_sets_litellm_api_key():
             timeout_secs=60,
         )
     )
-    env = build_tenant_env(tenant)
+    env = build_agent_env(agent)
     assert env["LITELLM_API_KEY"] == "sk-litellm-X"
     assert "ANTHROPIC_API_KEY" not in env
 
 
 def test_slack_disabled_omits_slack_tokens():
-    env = build_tenant_env(_tenant())
+    env = build_agent_env(_agent())
     assert "SLACK_BOT_TOKEN" not in env
 
 
 def test_slack_enabled_includes_all_slack_tokens():
-    tenant = _tenant(
+    agent = _agent(
         slack=SlackConfig(
             enabled=True,
             bot_token="xoxb-X",
@@ -71,31 +71,31 @@ def test_slack_enabled_includes_all_slack_tokens():
             signing_secret="sec",
         )
     )
-    env = build_tenant_env(tenant)
+    env = build_agent_env(agent)
     assert env["SLACK_BOT_TOKEN"] == "xoxb-X"
     assert env["SLACK_APP_TOKEN"] == "xapp-X"
     assert env["SLACK_SIGNING_SECRET"] == "sec"
 
 
 def test_composio_disabled_omits_key():
-    env = build_tenant_env(_tenant())
+    env = build_agent_env(_agent())
     assert "COMPOSIO_API_KEY" not in env
 
 
 def test_composio_enabled_includes_key():
-    tenant = _tenant(
+    agent = _agent(
         composio=ComposioConfig(
             enabled=True,
             api_key="comp-X",
             allowed_tools=("gmail.send",),
         )
     )
-    env = build_tenant_env(tenant)
+    env = build_agent_env(agent)
     assert env["COMPOSIO_API_KEY"] == "comp-X"
 
 
 def test_provider_metadata_always_present():
-    env = build_tenant_env(_tenant())
+    env = build_agent_env(_agent())
     assert env["ZEROCLAW_PROVIDER"] == "anthropic"
     assert env["ZEROCLAW_MODEL"] == "claude-sonnet-4-5"
     assert env["ZEROCLAW_WORKSPACE"] == "/zeroclaw/workspace"

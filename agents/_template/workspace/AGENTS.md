@@ -3,4 +3,4 @@
 <!-- BEGIN MANAGED SECURITY POLICY -- DO NOT EDIT MANUALLY -->
 <!-- END MANAGED SECURITY POLICY -->
 
-Add per-tenant operating notes here.
+Add per-agent operating notes here.

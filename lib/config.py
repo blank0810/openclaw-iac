@@ -61,7 +61,7 @@ class PolicyConfig:
 
 
 @dataclass(frozen=True)
-class TenantDefinition:
+class AgentDefinition:
     name: str
     display_name: str
     enabled: bool
@@ -74,12 +74,12 @@ class TenantDefinition:
     exec_enabled: bool
     policy: PolicyConfig
     workspace_dir: Path
-    tenant_toml_path: Path
+    agent_toml_path: Path
 
     def __post_init__(self) -> None:
         if not SLUG_PATTERN.match(self.name):
             raise ValueError(
-                f"tenant slug {self.name!r} must match {SLUG_PATTERN.pattern} "
+                f"agent slug {self.name!r} must match {SLUG_PATTERN.pattern} "
                 "(lowercase letters, digits, hyphen; must start with letter or digit)"
             )
         if self.host_port < 0 or self.host_port > 65535:
@@ -94,11 +94,11 @@ class DeploymentConfig:
     deploy_ssh_key_path: Path
     root_ssh_key_path: Path
     zeroclaw_image: str
-    tenants: tuple[TenantDefinition, ...]
+    agents: tuple[AgentDefinition, ...]
     effective_tcp_ports: tuple[int, ...]
 
 
-def _parse_tenant_toml(path: Path) -> TenantDefinition:
+def _parse_agent_toml(path: Path) -> AgentDefinition:
     raw = tomllib.loads(path.read_text())
     identity = raw.get("identity", {})
     runtime = raw.get("runtime", {})
@@ -109,7 +109,7 @@ def _parse_tenant_toml(path: Path) -> TenantDefinition:
     policy = raw.get("policy", {})
     name = identity["name"]
     image = runtime.get("image") or None
-    return TenantDefinition(
+    return AgentDefinition(
         name=name,
         display_name=identity.get("display_name", name),
         enabled=bool(identity.get("enabled", True)),
@@ -139,7 +139,7 @@ def _parse_tenant_toml(path: Path) -> TenantDefinition:
             denied_domains=tuple(policy.get("denied_domains", ())),
         ),
         workspace_dir=path.parent / "workspace",
-        tenant_toml_path=path,
+        agent_toml_path=path,
     )
 
 
@@ -153,23 +153,23 @@ def load_config(project_root: Path | None = None) -> DeploymentConfig:
     root_ssh_key_path = Path(str(env["ROOT_SSH_KEY_PATH"]))
     zeroclaw_image = str(env["ZEROCLAW_IMAGE"])
 
-    tenants_dir = project_root / "tenants"
-    tenant_list: list[TenantDefinition] = []
-    if tenants_dir.is_dir():
-        for child in sorted(tenants_dir.iterdir()):
+    agents_dir = project_root / "agents"
+    agent_list: list[AgentDefinition] = []
+    if agents_dir.is_dir():
+        for child in sorted(agents_dir.iterdir()):
             if not child.is_dir() or child.name.startswith("_"):
                 continue
-            toml_path = child / "tenant.toml"
+            toml_path = child / "agent.toml"
             if not toml_path.exists():
                 continue
-            tenant_list.append(_parse_tenant_toml(toml_path))
+            agent_list.append(_parse_agent_toml(toml_path))
 
-    _validate_uniqueness(tenant_list)
+    _validate_uniqueness(agent_list)
 
     effective_ports = {ssh_port}
-    for tenant in tenant_list:
-        if tenant.enabled and tenant.host_port:
-            effective_ports.add(tenant.host_port)
+    for agent in agent_list:
+        if agent.enabled and agent.host_port:
+            effective_ports.add(agent.host_port)
 
     return DeploymentConfig(
         server_host=server_host,
@@ -178,29 +178,29 @@ def load_config(project_root: Path | None = None) -> DeploymentConfig:
         deploy_ssh_key_path=deploy_ssh_key_path,
         root_ssh_key_path=root_ssh_key_path,
         zeroclaw_image=zeroclaw_image,
-        tenants=tuple(tenant_list),
+        agents=tuple(agent_list),
         effective_tcp_ports=tuple(sorted(effective_ports)),
     )
 
 
-def _validate_uniqueness(tenants: list[TenantDefinition]) -> None:
+def _validate_uniqueness(agents: list[AgentDefinition]) -> None:
     seen_names: dict[str, str] = {}
     seen_state_dirs: dict[str, str] = {}
     seen_ports: dict[int, str] = {}
-    for tenant in tenants:
-        if tenant.name in seen_names:
-            raise ValueError(f"duplicate tenant name {tenant.name!r}")
-        seen_names[tenant.name] = tenant.name
-        if tenant.state_dir in seen_state_dirs:
+    for agent in agents:
+        if agent.name in seen_names:
+            raise ValueError(f"duplicate agent name {agent.name!r}")
+        seen_names[agent.name] = agent.name
+        if agent.state_dir in seen_state_dirs:
             raise ValueError(
-                f"duplicate state_dir {tenant.state_dir!r} "
-                f"between {seen_state_dirs[tenant.state_dir]} and {tenant.name}"
+                f"duplicate state_dir {agent.state_dir!r} "
+                f"between {seen_state_dirs[agent.state_dir]} and {agent.name}"
             )
-        seen_state_dirs[tenant.state_dir] = tenant.name
-        if tenant.enabled and tenant.host_port:
-            if tenant.host_port in seen_ports:
+        seen_state_dirs[agent.state_dir] = agent.name
+        if agent.enabled and agent.host_port:
+            if agent.host_port in seen_ports:
                 raise ValueError(
-                    f"duplicate host_port {tenant.host_port} "
-                    f"between {seen_ports[tenant.host_port]} and {tenant.name}"
+                    f"duplicate host_port {agent.host_port} "
+                    f"between {seen_ports[agent.host_port]} and {agent.name}"
                 )
-            seen_ports[tenant.host_port] = tenant.name
+            seen_ports[agent.host_port] = agent.name

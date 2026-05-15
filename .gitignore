@@ -26,7 +26,7 @@ apps/*/sessions.db
 credentials.json
 
 # zeroclawctl rewrite
-tenants/
-!tenants/_template/
+agents/
+!agents/_template/
 backups/
 .runtime-temp/

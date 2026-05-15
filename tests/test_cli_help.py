@@ -16,12 +16,12 @@ def _run_help(*args):
 def test_top_level_help_lists_namespaces():
     result = _run_help("--help")
     assert result.returncode == 0
-    for name in ("server", "tenants", "workspace", "audit", "backup"):
+    for name in ("server", "agents", "workspace", "audit", "backup"):
         assert name in result.stdout
 
 
-def test_tenants_help_lists_commands():
-    result = _run_help("tenants", "--help")
+def test_agents_help_lists_commands():
+    result = _run_help("agents", "--help")
     assert result.returncode == 0
     for name in ("create", "deploy", "status", "fetch", "shell", "remove", "restore", "logs"):
         assert name in result.stdout

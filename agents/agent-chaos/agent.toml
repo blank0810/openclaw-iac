@@ -1,4 +1,4 @@
-# Tenant-level non-secret config. Copy to tenants/<name>/tenant.toml.
+# Agent-level non-secret config. Copy to agents/<name>/agent.toml.
 
 # Display name shown in chat. Must match the Slack app's display name.
 agent_name = "Chaos"

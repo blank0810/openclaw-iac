@@ -9,7 +9,7 @@ from gevent import monkey
 
 monkey.patch_all()
 
-from lib import audit, backup, server, tenants, workspace  # noqa: E402
+from lib import agents, audit, backup, server, workspace  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,45 +22,45 @@ def build_parser() -> argparse.ArgumentParser:
     server_deploy.add_argument("--dry", action="store_true")
     server_deploy.set_defaults(func=lambda args: server.cmd_deploy(dry=args.dry))
 
-    tenants_parser = sub.add_parser("tenants")
-    tenants_sub = tenants_parser.add_subparsers(dest="tenant_command", required=True)
+    agents_parser = sub.add_parser("agents")
+    agents_sub = agents_parser.add_subparsers(dest="agent_command", required=True)
 
-    create = tenants_sub.add_parser("create")
+    create = agents_sub.add_parser("create")
     create.add_argument("--name", required=True)
-    create.set_defaults(func=lambda args: tenants.cmd_create(args.name))
+    create.set_defaults(func=lambda args: agents.cmd_create(args.name))
 
-    deploy = tenants_sub.add_parser("deploy")
+    deploy = agents_sub.add_parser("deploy")
     deploy.add_argument("--name", required=True)
     deploy.add_argument("--pull-image", action="store_true")
     deploy.set_defaults(
-        func=lambda args: tenants.cmd_deploy(args.name, pull_image=args.pull_image)
+        func=lambda args: agents.cmd_deploy(args.name, pull_image=args.pull_image)
     )
 
-    status = tenants_sub.add_parser("status")
-    status.set_defaults(func=lambda args: tenants.cmd_status())
+    status = agents_sub.add_parser("status")
+    status.set_defaults(func=lambda args: agents.cmd_status())
 
-    fetch = tenants_sub.add_parser("fetch")
+    fetch = agents_sub.add_parser("fetch")
     fetch.add_argument("--name", required=True)
     fetch.add_argument("--force", action="store_true")
-    fetch.set_defaults(func=lambda args: tenants.cmd_fetch(args.name, force=args.force))
+    fetch.set_defaults(func=lambda args: agents.cmd_fetch(args.name, force=args.force))
 
-    shell = tenants_sub.add_parser("shell")
+    shell = agents_sub.add_parser("shell")
     shell.add_argument("--name", required=True)
-    shell.set_defaults(func=lambda args: tenants.cmd_shell(args.name))
+    shell.set_defaults(func=lambda args: agents.cmd_shell(args.name))
 
-    remove = tenants_sub.add_parser("remove")
+    remove = agents_sub.add_parser("remove")
     remove.add_argument("--name", required=True)
-    remove.set_defaults(func=lambda args: tenants.cmd_remove(args.name))
+    remove.set_defaults(func=lambda args: agents.cmd_remove(args.name))
 
-    restore = tenants_sub.add_parser("restore")
+    restore = agents_sub.add_parser("restore")
     restore.add_argument("--name", required=True)
     restore.add_argument("--from", dest="from_ts")
-    restore.set_defaults(func=lambda args: tenants.cmd_restore(args.name, ts=args.from_ts))
+    restore.set_defaults(func=lambda args: agents.cmd_restore(args.name, ts=args.from_ts))
 
-    logs = tenants_sub.add_parser("logs")
+    logs = agents_sub.add_parser("logs")
     logs.add_argument("--name", required=True)
     logs.add_argument("--follow", action="store_true")
-    logs.set_defaults(func=lambda args: tenants.cmd_logs(args.name, follow=args.follow))
+    logs.set_defaults(func=lambda args: agents.cmd_logs(args.name, follow=args.follow))
 
     workspace_parser = sub.add_parser("workspace")
     workspace_sub = workspace_parser.add_subparsers(dest="workspace_command", required=True)
@@ -89,10 +89,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     audit_parser = sub.add_parser("audit")
-    audit_parser.add_argument("--tenant")
+    audit_parser.add_argument("--agent")
     audit_parser.add_argument("--since")
     audit_parser.set_defaults(
-        func=lambda args: audit.cmd_audit(tenant=args.tenant, since=args.since)
+        func=lambda args: audit.cmd_audit(agent=args.agent, since=args.since)
     )
     return parser
 

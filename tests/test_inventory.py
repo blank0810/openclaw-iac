@@ -4,10 +4,10 @@ from lib.inventory import build_inventory_data
 
 
 def test_build_inventory_includes_host_facts(tmp_path, isolated_env, monkeypatch):
-    from tests.test_config import _write_env, _write_tenant
+    from tests.test_config import _write_env, _write_agent
 
     _write_env(tmp_path)
-    _write_tenant(tmp_path, "acme")
+    _write_agent(tmp_path, "acme")
     monkeypatch.chdir(tmp_path)
     data = build_inventory_data(
         project_root=tmp_path,
@@ -16,4 +16,4 @@ def test_build_inventory_includes_host_facts(tmp_path, isolated_env, monkeypatch
     )
     assert data["deploy_user"] == "overlord101"
     assert data["ssh_port"] == 2222
-    assert any(t["name"] == "acme" for t in data["tenants"])
+    assert any(a["name"] == "acme" for a in data["agents"])

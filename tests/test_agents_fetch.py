@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import subprocess
 
-from lib.tenants import cmd_fetch, cmd_remove, cmd_restore
-from tests.test_config import _write_env, _write_tenant
+from lib.agents import cmd_fetch, cmd_remove, cmd_restore
+from tests.test_config import _write_env, _write_agent
 
 
 def test_cmd_fetch_refuses_existing_without_force(tmp_path, isolated_env):
     _write_env(tmp_path)
-    _write_tenant(tmp_path, "acme")
+    _write_agent(tmp_path, "acme")
     assert cmd_fetch("acme", project_root=tmp_path) == 1
 
 
 def test_cmd_fetch_scp_workspace_with_force(tmp_path, isolated_env, monkeypatch):
     _write_env(tmp_path)
-    _write_tenant(tmp_path, "acme")
+    _write_agent(tmp_path, "acme")
     calls: list[list[str]] = []
 
     def fake_run(args, **kwargs):

@@ -3,13 +3,13 @@ from __future__ import annotations
 import subprocess
 
 from lib.workspace import cmd_deploy, cmd_fetch, cmd_session_clear, cmd_status
-from tests.test_config import _write_env, _write_tenant
+from tests.test_config import _write_env, _write_agent
 
 
 def test_workspace_status_reports_local_only(tmp_path, isolated_env, monkeypatch, capsys):
     _write_env(tmp_path)
-    tenant_dir = _write_tenant(tmp_path, "acme")
-    (tenant_dir / "workspace" / "AGENTS.md").write_text("local")
+    agent_dir = _write_agent(tmp_path, "acme")
+    (agent_dir / "workspace" / "AGENTS.md").write_text("local")
 
     def fake_run(args, **kwargs):
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
@@ -21,7 +21,7 @@ def test_workspace_status_reports_local_only(tmp_path, isolated_env, monkeypatch
 
 def test_workspace_fetch_runs_scp(tmp_path, isolated_env, monkeypatch):
     _write_env(tmp_path)
-    _write_tenant(tmp_path, "acme")
+    _write_agent(tmp_path, "acme")
     calls: list[list[str]] = []
 
     def fake_run(args, **kwargs):
@@ -35,8 +35,8 @@ def test_workspace_fetch_runs_scp(tmp_path, isolated_env, monkeypatch):
 
 def test_workspace_deploy_scp_local_markdowns(tmp_path, isolated_env, monkeypatch):
     _write_env(tmp_path)
-    tenant_dir = _write_tenant(tmp_path, "acme")
-    (tenant_dir / "workspace" / "AGENTS.md").write_text("# Agents")
+    agent_dir = _write_agent(tmp_path, "acme")
+    (agent_dir / "workspace" / "AGENTS.md").write_text("# Agents")
     calls: list[list[str]] = []
 
     def fake_run(args, **kwargs):
@@ -50,7 +50,7 @@ def test_workspace_deploy_scp_local_markdowns(tmp_path, isolated_env, monkeypatc
 
 def test_workspace_session_clear_archives_and_restarts(tmp_path, isolated_env, monkeypatch):
     _write_env(tmp_path)
-    _write_tenant(tmp_path, "acme")
+    _write_agent(tmp_path, "acme")
     calls: list[list[str]] = []
 
     def fake_run(args, **kwargs):

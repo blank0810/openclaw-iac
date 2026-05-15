@@ -3,7 +3,7 @@ from __future__ import annotations
 from pyinfra.operations import apt, files, systemd
 
 
-def install_probes(tenants) -> None:
+def install_probes(agents) -> None:
     apt.packages(
         name="Install jq for Slack probes",
         packages=["jq"],
@@ -38,12 +38,12 @@ def install_probes(tenants) -> None:
         _sudo=True,
     )
 
-    for tenant in tenants:
-        if not tenant.get("enabled", True):
+    for agent in agents:
+        if not agent.get("enabled", True):
             continue
-        service_name = f"zeroclaw-slack-probe-{tenant['name']}"
+        service_name = f"zeroclaw-slack-probe-{agent['name']}"
         files.file(
-            name=f"Ensure probe log exists for {tenant['name']}",
+            name=f"Ensure probe log exists for {agent['name']}",
             path=f"/var/log/{service_name}.log",
             present=True,
             user="root",
@@ -58,7 +58,7 @@ def install_probes(tenants) -> None:
             user="root",
             group="root",
             mode="644",
-            tenant=tenant,
+            agent=agent,
             _sudo=True,
         )
         files.template(
@@ -68,7 +68,7 @@ def install_probes(tenants) -> None:
             user="root",
             group="root",
             mode="644",
-            tenant=tenant,
+            agent=agent,
             _sudo=True,
         )
         systemd.daemon_reload(name=f"systemctl daemon-reload ({service_name})", _sudo=True)

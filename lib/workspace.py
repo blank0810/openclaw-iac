@@ -3,17 +3,17 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from lib.config import DeploymentConfig, TenantDefinition, load_config
+from lib.config import AgentDefinition, DeploymentConfig, load_config
 from lib.managed_policy import build_policy_block, inject_policy_block
 
 REMOTE_BASE = "/opt/zeroclaw"
 
 
-def _tenant(cfg: DeploymentConfig, name: str) -> TenantDefinition:
-    for tenant in cfg.tenants:
-        if tenant.name == name:
-            return tenant
-    raise ValueError(f"unknown tenant {name!r}")
+def _agent(cfg: DeploymentConfig, name: str) -> AgentDefinition:
+    for agent in cfg.agents:
+        if agent.name == name:
+            return agent
+    raise ValueError(f"unknown agent {name!r}")
 
 
 def _ssh(cfg: DeploymentConfig, command: str, *, capture: bool = False):
@@ -25,16 +25,16 @@ def _ssh(cfg: DeploymentConfig, command: str, *, capture: bool = False):
     )
 
 
-def _remote_workspace(tenant: TenantDefinition) -> str:
-    return f"{REMOTE_BASE}/states/{tenant.state_dir}/workspace"
+def _remote_workspace(agent: AgentDefinition) -> str:
+    return f"{REMOTE_BASE}/states/{agent.state_dir}/workspace"
 
 
 def cmd_status(name: str, project_root: Path | None = None) -> int:
     project_root = Path(project_root) if project_root else Path.cwd()
     cfg = load_config(project_root)
-    tenant = _tenant(cfg, name)
-    local_files = {p.name: p for p in (project_root / "tenants" / name / "workspace").glob("*.md")}
-    remote = _ssh(cfg, f"ls {_remote_workspace(tenant)}/*.md 2>/dev/null || true", capture=True)
+    agent = _agent(cfg, name)
+    local_files = {p.name: p for p in (project_root / "agents" / name / "workspace").glob("*.md")}
+    remote = _ssh(cfg, f"ls {_remote_workspace(agent)}/*.md 2>/dev/null || true", capture=True)
     remote_names = {Path(line).name for line in remote.stdout.splitlines() if line.strip()}
     for filename in sorted(set(local_files) | remote_names):
         if filename in local_files and filename not in remote_names:
@@ -50,8 +50,8 @@ def cmd_status(name: str, project_root: Path | None = None) -> int:
 def cmd_fetch(name: str, project_root: Path | None = None, force: bool = False) -> int:
     project_root = Path(project_root) if project_root else Path.cwd()
     cfg = load_config(project_root)
-    tenant = _tenant(cfg, name)
-    dest = project_root / "tenants" / name / "workspace"
+    agent = _agent(cfg, name)
+    dest = project_root / "agents" / name / "workspace"
     if dest.exists() and any(dest.glob("*.md")) and not force:
         print("local workspace files exist; use force to overwrite")
         return 1
@@ -61,7 +61,7 @@ def cmd_fetch(name: str, project_root: Path | None = None, force: bool = False) 
             "scp",
             "-P",
             str(cfg.ssh_port),
-            f"{cfg.deploy_user}@{cfg.server_host}:{_remote_workspace(tenant)}/*.md",
+            f"{cfg.deploy_user}@{cfg.server_host}:{_remote_workspace(agent)}/*.md",
             str(dest),
         ],
         check=False,
@@ -71,18 +71,18 @@ def cmd_fetch(name: str, project_root: Path | None = None, force: bool = False) 
 def cmd_deploy(name: str, project_root: Path | None = None, force: bool = False) -> int:
     project_root = Path(project_root) if project_root else Path.cwd()
     cfg = load_config(project_root)
-    tenant = _tenant(cfg, name)
-    workspace = project_root / "tenants" / name / "workspace"
+    agent = _agent(cfg, name)
+    workspace = project_root / "agents" / name / "workspace"
     if not force:
         if input(f"Deploy workspace for {name}? Type {name}: ") != name:
             return 1
-    agents = workspace / "AGENTS.md"
-    if agents.exists():
+    agents_md = workspace / "AGENTS.md"
+    if agents_md.exists():
         policy = build_policy_block(
-            tenant.policy.require_approval_for,
-            tenant.policy.denied_domains,
+            agent.policy.require_approval_for,
+            agent.policy.denied_domains,
         )
-        agents.write_text(inject_policy_block(agents.read_text(), policy))
+        agents_md.write_text(inject_policy_block(agents_md.read_text(), policy))
     for path in sorted(workspace.glob("*.md")):
         result = subprocess.run(
             [
@@ -90,7 +90,7 @@ def cmd_deploy(name: str, project_root: Path | None = None, force: bool = False)
                 "-P",
                 str(cfg.ssh_port),
                 str(path),
-                f"{cfg.deploy_user}@{cfg.server_host}:{_remote_workspace(tenant)}/{path.name}",
+                f"{cfg.deploy_user}@{cfg.server_host}:{_remote_workspace(agent)}/{path.name}",
             ],
             check=False,
         )
@@ -101,12 +101,12 @@ def cmd_deploy(name: str, project_root: Path | None = None, force: bool = False)
 
 def cmd_session_clear(name: str, project_root: Path | None = None) -> int:
     cfg = load_config(project_root)
-    tenant = _tenant(cfg, name)
-    workspace = _remote_workspace(tenant)
+    agent = _agent(cfg, name)
+    workspace = _remote_workspace(agent)
     command = (
         f"mkdir -p {workspace}/sessions/archive && "
         f"find {workspace}/sessions -maxdepth 1 -name '*.jsonl' -exec sh -c "
         f"'for f; do mv \"$f\" \"{workspace}/sessions/archive/$(basename \"$f\").bak.$(date -u +%Y%m%dT%H%M%SZ)\"; done' sh {{}} + && "
-        f"cd {REMOTE_BASE} && docker compose restart {tenant.name}"
+        f"cd {REMOTE_BASE} && docker compose restart {agent.name}"
     )
     return _ssh(cfg, command).returncode

@@ -12,16 +12,16 @@ def build_inventory_data(
     ssh_key: str | None = None,
 ) -> dict[str, Any]:
     cfg = load_config(project_root=project_root)
-    tenants = [
+    agents = [
         {
-            "name": tenant.name,
-            "state_dir": tenant.state_dir,
-            "enabled": tenant.enabled,
-            "host_port": tenant.host_port,
-            "image": tenant.image or cfg.zeroclaw_image,
-            "exec_enabled": tenant.exec_enabled,
+            "name": agent.name,
+            "state_dir": agent.state_dir,
+            "enabled": agent.enabled,
+            "host_port": agent.host_port,
+            "image": agent.image or cfg.zeroclaw_image,
+            "exec_enabled": agent.exec_enabled,
         }
-        for tenant in cfg.tenants
+        for agent in cfg.agents
     ]
     return {
         "deploy_user": cfg.deploy_user,
@@ -31,7 +31,7 @@ def build_inventory_data(
         "remote_base_dir": "/opt/zeroclaw",
         "remote_runtime_dir": "/opt/zeroclaw",
         "zeroclaw_image": cfg.zeroclaw_image,
-        "tenants": tenants,
+        "agents": agents,
         "effective_tcp_ports": list(cfg.effective_tcp_ports),
         "config": cfg,
     }
