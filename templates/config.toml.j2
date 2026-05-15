@@ -1,0 +1,32 @@
+# Managed by zeroclawctl. Rendered from tenants/{{ tenant.name }}/tenant.toml.
+# Real secrets live in zeroclaw.env (mode 0600), never in this file.
+
+[identity]
+name = "{{ tenant.name }}"
+display_name = "{{ tenant.display_name }}"
+
+[runtime]
+workspace = "/zeroclaw/workspace"
+
+[llm]
+provider = "{{ tenant.llm.provider }}"
+model = "{{ tenant.llm.model }}"
+timeout_secs = {{ tenant.llm.timeout_secs }}
+
+[slack]
+enabled = {{ "true" if tenant.slack.enabled else "false" }}
+
+[composio]
+enabled = {{ "true" if tenant.composio.enabled else "false" }}
+{% if tenant.composio.enabled %}allowed_tools = [{% for tool in tenant.composio.allowed_tools %}"{{ tool }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% endif %}
+
+[policy]
+require_approval_for = [{% for rule in tenant.policy.require_approval_for %}"{{ rule }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+denied_domains = [{% for domain in tenant.policy.denied_domains %}"{{ domain }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+
+{% if tenant.exec_enabled %}[security.exec]
+deny_patterns = [
+{% for pattern in exec_deny_patterns %}  "{{ pattern }}",
+{% endfor %}]
+{% endif %}
