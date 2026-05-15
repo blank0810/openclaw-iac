@@ -24,3 +24,9 @@ pyinfra.zip
 # App-level artifacts
 apps/*/sessions.db
 credentials.json
+
+# zeroclawctl rewrite
+tenants/
+!tenants/_template/
+backups/
+.runtime-temp/
