@@ -20,7 +20,15 @@ Agent config exposes `composio.allowed_tools`, `policy.denied_domains`, `policy.
 
 ## 5. Secrets
 
-Secrets are env-only: `lib/agent_env.py` routes LLM, Slack, and Composio credentials into `zeroclaw.env`, which deploy code chmods to `0600`. `templates/config.toml.j2` renders only non-secret metadata, and `tests/test_no_secrets_in_config.py` fails if known secret values appear in rendered config.
+Secrets are split across two surfaces according to what upstream ZeroClaw actually reads at startup (`apps/zeroclaw/upstream/crates/zeroclaw-config/src/schema.rs::apply_env_overrides`):
+
+- **LLM provider key** (Anthropic / LiteLLM): rendered into `zeroclaw.env` as `ZEROCLAW_API_KEY` by `lib/agent_env.py`. Deploy code chmods the file to `0600`. Upstream reads this from environment.
+- **Slack tokens** (`bot_token`, `app_token`, `signing_secret`): rendered into `states/<slug>/config.toml`'s `[channels_config.slack]` block by `templates/config.toml.j2`. Upstream has **no** env-read path for these — config-only.
+- **Composio API key** (native path) or **MCP x-consumer-api-key** (MCP path): rendered into `[composio].api_key` or `[[mcp.servers]].headers` in `config.toml`. Same reason — upstream doesn't read them from env.
+
+The deploy host's `states/<slug>/config.toml` is owned by the deploy user and chmod-ed to `0600`. The compose mount is `:ro`, so even ZeroClaw's own `Config::save()` can't rewrite it after boot.
+
+`tests/test_no_secrets_in_config.py` enforces this exact split: the LLM key must never appear in rendered `config.toml`, and Slack/Composio tokens must be present in `config.toml` (because that's the only place upstream reads them). `tests/test_agent_env.py` enforces the inverse for the env dict.
 
 ## 6. Memory And Privacy
 

@@ -1,31 +1,79 @@
-# Managed by zeroclawctl. Rendered from agents/{{ agent.name }}/agent.toml.
-# Real secrets live in zeroclaw.env (mode 0600), never in this file.
+# Managed by zeroclawctl - rendered from agents/{{ agent.name }}/agent.toml.
+# File mode is 0600 on the remote host because Composio MCP key + Slack
+# tokens are rendered into this file directly. Upstream ZeroClaw does not
+# read those from environment variables (see schema.rs apply_env_overrides
+# and SECURITY.md §5). The Anthropic / LLM API key still flows via env
+# (ZEROCLAW_API_KEY) - it's the only secret upstream picks up from env.
 
-[identity]
-name = "{{ agent.name }}"
-display_name = "{{ agent.display_name }}"
+schema_version = 2
 
-[runtime]
-workspace = "/zeroclaw/workspace"
+default_provider = "{{ agent.llm.provider }}"
+default_model = "{{ agent.llm.model }}"
+default_temperature = 0.7
 
-[llm]
-provider = "{{ agent.llm.provider }}"
-model = "{{ agent.llm.model }}"
-timeout_secs = {{ agent.llm.timeout_secs }}
+[gateway]
+port = 42617
+host = "[::]"
+allow_public_bind = true
+require_pairing = false
 
-[slack]
-enabled = {{ "true" if agent.slack.enabled else "false" }}
+[agent]
+max_tool_iterations = 50
+max_tool_result_chars = 50000
+max_context_tokens = 32000
+
+[agent.context_compression]
+enabled = true
+tool_result_retrim_chars = 2000
+
+[memory]
+backend = "sqlite"
+auto_save = true
+hygiene_enabled = true
+archive_after_days = 7
+purge_after_days = 30
+embedding_provider = "none"
+{% if agent.composio.enabled and agent.composio.mcp_url %}
+
+[mcp]
+enabled = true
+deferred_loading = false
+
+[[mcp.servers]]
+name = "composio"
+transport = "{{ agent.composio.mcp_transport }}"
+url = "{{ agent.composio.mcp_url }}"
+headers = { "{{ agent.composio.mcp_auth_header }}" = "{{ agent.composio.mcp_api_key }}" }
+{% elif agent.composio.enabled %}
 
 [composio]
-enabled = {{ "true" if agent.composio.enabled else "false" }}
-{% if agent.composio.enabled %}allowed_tools = [{% for tool in agent.composio.allowed_tools %}"{{ tool }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+enabled = true
+api_key = "{{ agent.composio.api_key }}"
+{% endif %}
+{% if agent.slack.enabled %}
+
+[channels_config.slack]
+bot_token = "{{ agent.slack.bot_token }}"
+app_token = "{{ agent.slack.app_token }}"
+{% if agent.slack.signing_secret %}signing_secret = "{{ agent.slack.signing_secret }}"
+{% endif %}
+{% if agent.slack.channel_id %}channel_id = "{{ agent.slack.channel_id }}"
+{% endif %}
+allowed_users = [{% for u in agent.slack.allowed_users %}"{{ u }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+mention_only = {{ "true" if agent.slack.mention_only else "false" }}
+thread_replies = {{ "true" if agent.slack.thread_replies else "false" }}
+use_markdown_blocks = {{ "true" if agent.slack.use_markdown_blocks else "false" }}
+stream_drafts = {{ "true" if agent.slack.stream_drafts else "false" }}
 {% endif %}
 
-[policy]
-require_approval_for = [{% for rule in agent.policy.require_approval_for %}"{{ rule }}"{% if not loop.last %}, {% endif %}{% endfor %}]
-denied_domains = [{% for domain in agent.policy.denied_domains %}"{{ domain }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+[autonomy]
+level = "{{ agent.autonomy.level }}"
+auto_approve = [
+{% for tool in agent.autonomy.auto_approve %}    "{{ tool }}",
+{% endfor %}]
+{% if agent.exec_enabled %}
 
-{% if agent.exec_enabled %}[security.exec]
+[security.exec]
 deny_patterns = [
 {% for pattern in exec_deny_patterns %}  "{{ pattern }}",
 {% endfor %}]

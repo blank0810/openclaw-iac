@@ -37,7 +37,7 @@ def test_cmd_deploy_renders_uploads_and_recreates(tmp_path, isolated_env, monkey
     monkeypatch.setattr(subprocess, "run", fake_run)
     assert cmd_deploy("acme", project_root=tmp_path) == 0
 
-    assert "ANTHROPIC_API_KEY=sk-ant-acme" in scp_payloads["zeroclaw.env"]
+    assert "ZEROCLAW_API_KEY=sk-ant-acme" in scp_payloads["zeroclaw.env"]
     assert "sk-ant-acme" not in scp_payloads["config.toml"]
     assert any(call[0] == "scp" and "zeroclaw.env" in call[-2] for call in calls)
     assert any("chmod 0600" in call[-1] for call in calls if call[0] == "ssh")

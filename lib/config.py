@@ -35,6 +35,12 @@ class SlackConfig:
     bot_token: str
     app_token: str
     signing_secret: str
+    channel_id: str
+    allowed_users: tuple[str, ...]
+    mention_only: bool
+    thread_replies: bool
+    use_markdown_blocks: bool
+    stream_drafts: bool
 
     def __post_init__(self) -> None:
         if self.enabled and not self.bot_token:
@@ -48,10 +54,27 @@ class ComposioConfig:
     enabled: bool
     api_key: str
     allowed_tools: tuple[str, ...]
+    mcp_url: str
+    mcp_api_key: str
+    mcp_transport: str
+    mcp_auth_header: str
 
     def __post_init__(self) -> None:
-        if self.enabled and not self.api_key:
-            raise ValueError("composio.api_key is required when composio.enabled = true")
+        if self.enabled and self.mcp_url and not self.mcp_api_key:
+            raise ValueError(
+                "composio.mcp_api_key is required when composio.mcp_url is set"
+            )
+        if self.enabled and not self.mcp_url and not self.api_key:
+            raise ValueError(
+                "either composio.mcp_url+mcp_api_key (MCP path) or composio.api_key "
+                "(native path) must be set when composio.enabled = true"
+            )
+
+
+@dataclass(frozen=True)
+class AutonomyConfig:
+    level: str
+    auto_approve: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -71,6 +94,7 @@ class AgentDefinition:
     llm: LlmConfig
     slack: SlackConfig
     composio: ComposioConfig
+    autonomy: AutonomyConfig
     exec_enabled: bool
     policy: PolicyConfig
     workspace_dir: Path
@@ -98,6 +122,17 @@ class DeploymentConfig:
     effective_tcp_ports: tuple[int, ...]
 
 
+DEFAULT_AUTO_APPROVE: tuple[str, ...] = (
+    "file_read",
+    "memory_recall",
+    "memory_store",
+    "calculator",
+    "glob_search",
+    "content_search",
+    "tool_search",
+)
+
+
 def _parse_agent_toml(path: Path) -> AgentDefinition:
     raw = tomllib.loads(path.read_text())
     identity = raw.get("identity", {})
@@ -105,6 +140,7 @@ def _parse_agent_toml(path: Path) -> AgentDefinition:
     llm = raw.get("llm", {})
     slack = raw.get("slack", {})
     composio = raw.get("composio", {})
+    autonomy = raw.get("autonomy", {})
     exec_ = raw.get("exec", {})
     policy = raw.get("policy", {})
     name = identity["name"]
@@ -127,11 +163,25 @@ def _parse_agent_toml(path: Path) -> AgentDefinition:
             bot_token=slack.get("bot_token", ""),
             app_token=slack.get("app_token", ""),
             signing_secret=slack.get("signing_secret", ""),
+            channel_id=slack.get("channel_id", ""),
+            allowed_users=tuple(slack.get("allowed_users", ("*",))),
+            mention_only=bool(slack.get("mention_only", True)),
+            thread_replies=bool(slack.get("thread_replies", True)),
+            use_markdown_blocks=bool(slack.get("use_markdown_blocks", True)),
+            stream_drafts=bool(slack.get("stream_drafts", False)),
         ),
         composio=ComposioConfig(
             enabled=bool(composio.get("enabled", False)),
             api_key=composio.get("api_key", ""),
             allowed_tools=tuple(composio.get("allowed_tools", ())),
+            mcp_url=composio.get("mcp_url", ""),
+            mcp_api_key=composio.get("mcp_api_key", ""),
+            mcp_transport=composio.get("mcp_transport", "http"),
+            mcp_auth_header=composio.get("mcp_auth_header", "x-consumer-api-key"),
+        ),
+        autonomy=AutonomyConfig(
+            level=autonomy.get("level", "supervised"),
+            auto_approve=tuple(autonomy.get("auto_approve", DEFAULT_AUTO_APPROVE)),
         ),
         exec_enabled=bool(exec_.get("enabled", False)),
         policy=PolicyConfig(

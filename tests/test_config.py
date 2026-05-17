@@ -5,7 +5,50 @@ from pathlib import Path
 import pytest
 
 from lib.config import AgentDefinition, DeploymentConfig, LlmConfig, load_config
-from lib.config import ComposioConfig, PolicyConfig, SlackConfig
+from lib.config import (
+    AutonomyConfig,
+    ComposioConfig,
+    DEFAULT_AUTO_APPROVE,
+    PolicyConfig,
+    SlackConfig,
+)
+
+
+def _slack(**overrides):
+    defaults = dict(
+        enabled=False,
+        bot_token="",
+        app_token="",
+        signing_secret="",
+        channel_id="",
+        allowed_users=("*",),
+        mention_only=True,
+        thread_replies=True,
+        use_markdown_blocks=True,
+        stream_drafts=False,
+    )
+    defaults.update(overrides)
+    return SlackConfig(**defaults)
+
+
+def _composio(**overrides):
+    defaults = dict(
+        enabled=False,
+        api_key="",
+        allowed_tools=(),
+        mcp_url="",
+        mcp_api_key="",
+        mcp_transport="http",
+        mcp_auth_header="x-consumer-api-key",
+    )
+    defaults.update(overrides)
+    return ComposioConfig(**defaults)
+
+
+def _autonomy(**overrides):
+    defaults = dict(level="supervised", auto_approve=DEFAULT_AUTO_APPROVE)
+    defaults.update(overrides)
+    return AutonomyConfig(**defaults)
 
 
 def test_llm_config_accepts_anthropic_provider():
@@ -35,28 +78,51 @@ def test_llm_config_is_frozen():
 
 
 def test_slack_config_disabled_allows_empty_tokens():
-    cfg = SlackConfig(enabled=False, bot_token="", app_token="", signing_secret="")
+    cfg = _slack(enabled=False)
     assert cfg.enabled is False
 
 
 def test_slack_config_enabled_requires_bot_token():
     with pytest.raises(ValueError, match="bot_token"):
-        SlackConfig(enabled=True, bot_token="", app_token="xapp-x", signing_secret="s")
+        _slack(enabled=True, bot_token="", app_token="xapp-x", signing_secret="s")
+
+
+def test_slack_config_scoping_defaults():
+    cfg = _slack()
+    assert cfg.allowed_users == ("*",)
+    assert cfg.mention_only is True
+    assert cfg.thread_replies is True
 
 
 def test_composio_config_disabled_allows_empty_key():
-    cfg = ComposioConfig(enabled=False, api_key="", allowed_tools=())
+    cfg = _composio(enabled=False)
     assert cfg.enabled is False
 
 
 def test_composio_config_enabled_requires_api_key():
     with pytest.raises(ValueError, match="api_key"):
-        ComposioConfig(enabled=True, api_key="", allowed_tools=())
+        _composio(enabled=True, api_key="", mcp_url="", mcp_api_key="")
+
+
+def test_composio_config_mcp_path_requires_mcp_api_key():
+    with pytest.raises(ValueError, match="mcp_api_key"):
+        _composio(enabled=True, mcp_url="https://x", mcp_api_key="")
+
+
+def test_composio_config_mcp_path_satisfies_api_key_requirement():
+    cfg = _composio(enabled=True, mcp_url="https://x", mcp_api_key="ck_y")
+    assert cfg.mcp_url == "https://x"
 
 
 def test_composio_allowed_tools_is_tuple():
-    cfg = ComposioConfig(enabled=True, api_key="x", allowed_tools=("gmail.send",))
+    cfg = _composio(enabled=True, api_key="x", allowed_tools=("gmail.send",))
     assert isinstance(cfg.allowed_tools, tuple)
+
+
+def test_autonomy_config_default_level():
+    cfg = _autonomy()
+    assert cfg.level == "supervised"
+    assert "memory_recall" in cfg.auto_approve
 
 
 def test_policy_config_defaults_empty():
@@ -78,8 +144,9 @@ def _make_agent(**overrides):
             api_key="sk-ant-x",
             timeout_secs=60,
         ),
-        slack=SlackConfig(enabled=False, bot_token="", app_token="", signing_secret=""),
-        composio=ComposioConfig(enabled=False, api_key="", allowed_tools=()),
+        slack=_slack(),
+        composio=_composio(),
+        autonomy=_autonomy(),
         exec_enabled=False,
         policy=PolicyConfig(require_approval_for=(), denied_domains=()),
         workspace_dir=Path("/tmp/agents/acme/workspace"),
