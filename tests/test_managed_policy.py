@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from lib.managed_policy import build_policy_block, inject_policy_block
 
 POLICY_BEGIN = "<!-- BEGIN MANAGED SECURITY POLICY"
@@ -38,3 +40,15 @@ def test_inject_creates_block_when_absent():
     out = inject_policy_block(existing, new_block)
     assert POLICY_BEGIN in out
     assert "# Header" in out
+
+
+def test_inject_raises_on_multiple_existing_blocks():
+    existing = (
+        "# Header\n"
+        "<!-- BEGIN MANAGED SECURITY POLICY -->\nA\n<!-- END MANAGED SECURITY POLICY -->\n"
+        "middle\n"
+        "<!-- BEGIN MANAGED SECURITY POLICY -->\nB\n<!-- END MANAGED SECURITY POLICY -->\n"
+    )
+    new_block = build_policy_block(approval_gates=(), denied_domains=())
+    with pytest.raises(ValueError, match="multiple"):
+        inject_policy_block(existing, new_block)

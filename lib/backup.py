@@ -4,6 +4,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from lib.audit import append_audit_line, default_actor
 from lib.config import AgentDefinition, DeploymentConfig, load_config
 
 
@@ -43,6 +44,14 @@ def cmd_backup(name: str | None, project_root: Path | None = None) -> int:
                 stdout=out,
                 check=False,
             )
+        append_audit_line(
+            cfg,
+            actor=default_actor(),
+            cmd="backup",
+            agent=agent.name,
+            image=None,
+            result="ok" if result.returncode == 0 else "fail",
+        )
         if result.returncode:
             return result.returncode
     return 0

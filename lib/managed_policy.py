@@ -37,7 +37,13 @@ Denied domains: {domains}
 
 
 def inject_policy_block(existing: str, new_block: str) -> str:
-    if _BLOCK_RE.search(existing):
+    matches = _BLOCK_RE.findall(existing)
+    if len(matches) >= 2:
+        raise ValueError(
+            "AGENTS.md contains multiple managed policy blocks; "
+            "refusing to inject - resolve manually"
+        )
+    if matches:
         return _BLOCK_RE.sub(new_block, existing, count=1)
     sep = "\n\n" if existing and not existing.endswith("\n") else "\n"
     return existing + sep + new_block + "\n"

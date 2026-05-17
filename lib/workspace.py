@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from pathlib import Path
 
+from lib.audit import append_audit_line, default_actor
 from lib.config import AgentDefinition, DeploymentConfig, load_config
 from lib.managed_policy import build_policy_block, inject_policy_block
 
@@ -36,13 +38,34 @@ def cmd_status(name: str, project_root: Path | None = None) -> int:
     local_files = {p.name: p for p in (project_root / "agents" / name / "workspace").glob("*.md")}
     remote = _ssh(cfg, f"ls {_remote_workspace(agent)}/*.md 2>/dev/null || true", capture=True)
     remote_names = {Path(line).name for line in remote.stdout.splitlines() if line.strip()}
+    # One batched SSH call for all remote hashes; parse `<hex>  <path>` lines.
+    remote_hashes: dict[str, str] = {}
+    if remote_names:
+        sha = _ssh(
+            cfg,
+            f"sha256sum {_remote_workspace(agent)}/*.md 2>/dev/null || true",
+            capture=True,
+        )
+        for line in sha.stdout.splitlines():
+            line = line.rstrip()
+            if not line:
+                continue
+            # sha256sum format: "<64-hex>  <path>" (two-space separator)
+            digest, _, remote_path = line.partition("  ")
+            digest = digest.strip()
+            remote_path = remote_path.strip()
+            if not digest or not remote_path:
+                continue
+            remote_hashes[Path(remote_path).name] = digest
     for filename in sorted(set(local_files) | remote_names):
         if filename in local_files and filename not in remote_names:
             status = "local_only"
         elif filename not in local_files and filename in remote_names:
             status = "remote_only"
         else:
-            status = "different"
+            local_digest = hashlib.sha256(local_files[filename].read_bytes()).hexdigest()
+            remote_digest = remote_hashes.get(filename)
+            status = "same" if remote_digest == local_digest else "drift"
         print(f"{filename} {status}")
     return 0
 
@@ -83,6 +106,7 @@ def cmd_deploy(name: str, project_root: Path | None = None, force: bool = False)
             agent.policy.denied_domains,
         )
         agents_md.write_text(inject_policy_block(agents_md.read_text(), policy))
+    rc = 0
     for path in sorted(workspace.glob("*.md")):
         result = subprocess.run(
             [
@@ -95,8 +119,17 @@ def cmd_deploy(name: str, project_root: Path | None = None, force: bool = False)
             check=False,
         )
         if result.returncode:
-            return result.returncode
-    return 0
+            rc = result.returncode
+            break
+    append_audit_line(
+        cfg,
+        actor=default_actor(),
+        cmd="workspace.deploy",
+        agent=name,
+        image=None,
+        result="ok" if rc == 0 else "fail",
+    )
+    return rc
 
 
 def cmd_session_clear(name: str, project_root: Path | None = None) -> int:
@@ -109,4 +142,13 @@ def cmd_session_clear(name: str, project_root: Path | None = None) -> int:
         f"'for f; do mv \"$f\" \"{workspace}/sessions/archive/$(basename \"$f\").bak.$(date -u +%Y%m%dT%H%M%SZ)\"; done' sh {{}} + && "
         f"cd {REMOTE_BASE} && docker compose restart {agent.name}"
     )
-    return _ssh(cfg, command).returncode
+    rc = _ssh(cfg, command).returncode
+    append_audit_line(
+        cfg,
+        actor=default_actor(),
+        cmd="workspace.session_clear",
+        agent=name,
+        image=None,
+        result="ok" if rc == 0 else "fail",
+    )
+    return rc

@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import tomllib
+except ImportError:  # pragma: no cover - Python 3.10 compatibility
+    import tomli as tomllib
 
 from jinja2 import Environment, FileSystemLoader
 
+from lib.audit import append_audit_line, default_actor
 from lib.config import AgentDefinition, DeploymentConfig, SLUG_PATTERN, load_config
 from lib.config_patch import default_exec_deny_patterns
 from lib.managed_policy import build_policy_block, inject_policy_block
@@ -88,33 +96,54 @@ def cmd_deploy(name: str, project_root: Path | None = None, pull_image: bool = F
         agent=agent,
         exec_deny_patterns=default_exec_deny_patterns(),
     )
-    (staged / "zeroclaw.env").write_text(env_text)
+    env_path = staged / "zeroclaw.env"
+    # Open with mode 0600 atomically so the secrets file never exists at 0644.
+    fd = os.open(str(env_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(env_text)
     (staged / "config.toml").write_text(config_text)
 
-    remote_state = f"{REMOTE_BASE}/states/{agent.state_dir}"
-    _ssh(cfg, f"mkdir -p {remote_state}/workspace {remote_state}/workspace/sessions")
-    _scp_to(cfg, staged / "zeroclaw.env", f"{remote_state}/zeroclaw.env")
-    _scp_to(cfg, staged / "config.toml", f"{remote_state}/config.toml")
-    _ssh(cfg, f"chmod 0600 {remote_state}/zeroclaw.env && chmod 0644 {remote_state}/config.toml")
+    rc = 1
+    try:
+        remote_state = f"{REMOTE_BASE}/states/{agent.state_dir}"
+        _ssh(cfg, f"mkdir -p {remote_state}/workspace {remote_state}/workspace/sessions")
+        _scp_to(cfg, env_path, f"{remote_state}/zeroclaw.env")
+        _scp_to(cfg, staged / "config.toml", f"{remote_state}/config.toml")
+        _ssh(cfg, f"chmod 0600 {remote_state}/zeroclaw.env && chmod 0644 {remote_state}/config.toml")
 
-    existing_agents = _ssh(
-        cfg,
-        f"cat {remote_state}/workspace/AGENTS.md 2>/dev/null || true",
-        capture=True,
-    ).stdout
-    policy = build_policy_block(
-        approval_gates=agent.policy.require_approval_for,
-        denied_domains=agent.policy.denied_domains,
-    )
-    (staged / "AGENTS.md").write_text(inject_policy_block(existing_agents or "", policy))
-    _scp_to(cfg, staged / "AGENTS.md", f"{remote_state}/workspace/AGENTS.md")
+        existing_agents = _ssh(
+            cfg,
+            f"cat {remote_state}/workspace/AGENTS.md 2>/dev/null || true",
+            capture=True,
+        ).stdout
+        policy = build_policy_block(
+            approval_gates=agent.policy.require_approval_for,
+            denied_domains=agent.policy.denied_domains,
+        )
+        (staged / "AGENTS.md").write_text(inject_policy_block(existing_agents or "", policy))
+        _scp_to(cfg, staged / "AGENTS.md", f"{remote_state}/workspace/AGENTS.md")
 
-    if pull_image:
-        _ssh(cfg, f"cd {REMOTE_BASE} && docker pull {agent.image or cfg.zeroclaw_image}")
-    return _ssh(
-        cfg,
-        f"cd {REMOTE_BASE} && docker compose up -d --force-recreate {agent.name}",
-    ).returncode
+        if pull_image:
+            _ssh(cfg, f"cd {REMOTE_BASE} && docker pull {agent.image or cfg.zeroclaw_image}")
+        rc = _ssh(
+            cfg,
+            f"cd {REMOTE_BASE} && docker compose up -d --force-recreate {agent.name}",
+        ).returncode
+        return rc
+    finally:
+        # Never leave the rendered secrets file behind in .runtime-temp/.
+        try:
+            env_path.unlink()
+        except FileNotFoundError:
+            pass
+        append_audit_line(
+            cfg,
+            actor=default_actor(),
+            cmd="agents.deploy",
+            agent=agent.name,
+            image=agent.image or cfg.zeroclaw_image,
+            result="ok" if rc == 0 else "fail",
+        )
 
 
 def cmd_status(project_root: Path | None = None) -> int:
@@ -154,7 +183,16 @@ def cmd_remove(name: str, project_root: Path | None = None) -> int:
         f"mkdir -p .archive && mv states/{name} .archive/{name}-$(date -u +%Y%m%dT%H%M%SZ) && "
         "docker compose up -d"
     )
-    return _ssh(cfg, command).returncode
+    rc = _ssh(cfg, command).returncode
+    append_audit_line(
+        cfg,
+        actor=default_actor(),
+        cmd="agents.remove",
+        agent=name,
+        image=None,
+        result="ok" if rc == 0 else "fail",
+    )
+    return rc
 
 
 def cmd_fetch(name: str, project_root: Path | None = None, force: bool = False) -> int:
@@ -167,21 +205,314 @@ def cmd_fetch(name: str, project_root: Path | None = None, force: bool = False) 
         return 1
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "workspace").mkdir(exist_ok=True)
-    return subprocess.run(
+    fetched = dest / ".fetched"
+    fetched.mkdir(exist_ok=True)
+
+    remote_state = f"{REMOTE_BASE}/states/{agent.state_dir}"
+
+    # 1) Workspace markdowns (keep as the first scp — existing tests assert this).
+    rc = subprocess.run(
         [
             "scp",
             "-P",
             str(cfg.ssh_port),
             "-r",
-            f"{cfg.deploy_user}@{cfg.server_host}:{REMOTE_BASE}/states/{agent.state_dir}/workspace/*.md",
+            f"{cfg.deploy_user}@{cfg.server_host}:{remote_state}/workspace/*.md",
             str(dest / "workspace"),
         ],
         check=False,
     ).returncode
+    if rc != 0:
+        return rc
+
+    # 2) Reference snapshots: config.toml + zeroclaw.env.
+    remote_config = f"{cfg.deploy_user}@{cfg.server_host}:{remote_state}/config.toml"
+    remote_env = f"{cfg.deploy_user}@{cfg.server_host}:{remote_state}/zeroclaw.env"
+    rc = subprocess.run(
+        ["scp", "-P", str(cfg.ssh_port), remote_config, str(fetched / "config.toml")],
+        check=False,
+    ).returncode
+    if rc != 0:
+        return rc
+    rc = subprocess.run(
+        ["scp", "-P", str(cfg.ssh_port), remote_env, str(fetched / "zeroclaw.env")],
+        check=False,
+    ).returncode
+    if rc != 0:
+        return rc
+
+    # Lock the secrets snapshot down to 0600.
+    env_snapshot = fetched / "zeroclaw.env"
+    if env_snapshot.exists():
+        os.chmod(env_snapshot, 0o600)
+
+    # 3) Fetch timestamp.
+    (fetched / "FETCH_TIMESTAMP").write_text(
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n"
+    )
+
+    # 4) Merge live values back into local agent.toml.
+    try:
+        _merge_fetched_into_agent_toml(
+            agent_toml=dest / "agent.toml",
+            fetched_config=fetched / "config.toml",
+            fetched_env=fetched / "zeroclaw.env",
+        )
+    except FileNotFoundError:
+        # Snapshot files might be missing in some edge cases; if so we still
+        # consider the workspace fetch a partial success but skip merge.
+        pass
+
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# TOML merge helpers (no external deps)
+# ---------------------------------------------------------------------------
+
+
+# Sections fully managed by zeroclawctl. When present in the existing
+# agent.toml, we rewrite them from the merged tree on fetch. Anything outside
+# these sections is preserved verbatim.
+_MANAGED_SECTIONS = ("identity", "runtime", "llm", "slack", "composio", "exec", "policy")
+
+
+def _parse_env_file(text: str) -> dict[str, str]:
+    """Parse a KEY=VALUE env file. Ignores blanks and comments."""
+    out: dict[str, str] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        # Strip a single pair of surrounding quotes if present.
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        out[key] = value
+    return out
+
+
+def _env_to_agent_overrides(env: dict[str, str]) -> dict[str, dict[str, object]]:
+    """Inverse of lib.agent_env.build_agent_env: map env keys back to agent.toml fields."""
+    overrides: dict[str, dict[str, object]] = {}
+    provider = env.get("ZEROCLAW_PROVIDER")
+    if provider:
+        overrides.setdefault("llm", {})["provider"] = provider
+    if "ZEROCLAW_MODEL" in env:
+        overrides.setdefault("llm", {})["model"] = env["ZEROCLAW_MODEL"]
+    if "ZEROCLAW_PROVIDER_TIMEOUT_SECS" in env:
+        try:
+            overrides.setdefault("llm", {})["timeout_secs"] = int(
+                env["ZEROCLAW_PROVIDER_TIMEOUT_SECS"]
+            )
+        except ValueError:
+            pass
+    # api_key is provider-specific.
+    if provider == "anthropic" and "ANTHROPIC_API_KEY" in env:
+        overrides.setdefault("llm", {})["api_key"] = env["ANTHROPIC_API_KEY"]
+    elif provider == "litellm" and "LITELLM_API_KEY" in env:
+        overrides.setdefault("llm", {})["api_key"] = env["LITELLM_API_KEY"]
+    else:
+        # Fall back to whichever key is present (re-adoption of an orphaned server).
+        if "ANTHROPIC_API_KEY" in env:
+            overrides.setdefault("llm", {})["api_key"] = env["ANTHROPIC_API_KEY"]
+        elif "LITELLM_API_KEY" in env:
+            overrides.setdefault("llm", {})["api_key"] = env["LITELLM_API_KEY"]
+
+    if "SLACK_BOT_TOKEN" in env:
+        overrides.setdefault("slack", {})["bot_token"] = env["SLACK_BOT_TOKEN"]
+    if "SLACK_APP_TOKEN" in env:
+        overrides.setdefault("slack", {})["app_token"] = env["SLACK_APP_TOKEN"]
+    if "SLACK_SIGNING_SECRET" in env:
+        overrides.setdefault("slack", {})["signing_secret"] = env["SLACK_SIGNING_SECRET"]
+
+    if "COMPOSIO_API_KEY" in env:
+        overrides.setdefault("composio", {})["api_key"] = env["COMPOSIO_API_KEY"]
+
+    return overrides
+
+
+def _config_to_agent_overrides(remote_cfg: dict) -> dict[str, dict[str, object]]:
+    """Pull whichever values templates/config.toml.j2 renders back into agent.toml shape."""
+    overrides: dict[str, dict[str, object]] = {}
+
+    identity = remote_cfg.get("identity") or {}
+    if "display_name" in identity:
+        overrides.setdefault("identity", {})["display_name"] = identity["display_name"]
+    if "name" in identity:
+        overrides.setdefault("identity", {})["name"] = identity["name"]
+
+    llm = remote_cfg.get("llm") or {}
+    for key in ("provider", "model", "timeout_secs"):
+        if key in llm:
+            overrides.setdefault("llm", {})[key] = llm[key]
+
+    slack = remote_cfg.get("slack") or {}
+    if "enabled" in slack:
+        overrides.setdefault("slack", {})["enabled"] = bool(slack["enabled"])
+
+    composio = remote_cfg.get("composio") or {}
+    if "enabled" in composio:
+        overrides.setdefault("composio", {})["enabled"] = bool(composio["enabled"])
+    if "allowed_tools" in composio:
+        overrides.setdefault("composio", {})["allowed_tools"] = list(
+            composio["allowed_tools"]
+        )
+
+    policy = remote_cfg.get("policy") or {}
+    if "require_approval_for" in policy:
+        overrides.setdefault("policy", {})["require_approval_for"] = list(
+            policy["require_approval_for"]
+        )
+    if "denied_domains" in policy:
+        overrides.setdefault("policy", {})["denied_domains"] = list(
+            policy["denied_domains"]
+        )
+
+    # exec.enabled does not appear directly in config.toml.j2 (it's used as a
+    # render gate), but the server-side [security.exec] block hints at it.
+    if "security" in remote_cfg and "exec" in remote_cfg["security"]:
+        overrides.setdefault("exec", {})["enabled"] = True
+
+    return overrides
+
+
+def _format_toml_value(value: object) -> str:
+    """Render a Python value as a TOML scalar/array literal."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, str):
+        # Minimal escaping for double-quoted basic strings.
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_format_toml_value(v) for v in value) + "]"
+    raise TypeError(f"unsupported TOML value type: {type(value).__name__}")
+
+
+def _render_managed_section(name: str, body: dict[str, object]) -> str:
+    """Emit a TOML section header + simple key=value lines."""
+    out = [f"[{name}]"]
+    for key, value in body.items():
+        out.append(f"{key} = {_format_toml_value(value)}")
+    return "\n".join(out) + "\n"
+
+
+def _split_into_sections(text: str) -> list[tuple[str | None, str]]:
+    """Split a TOML document into (section_name, block_text) chunks.
+
+    The first chunk's section_name is None (preamble / comments before any
+    header). Each subsequent chunk's block_text includes its own '[section]'
+    header line and everything up to the next header. Order is preserved.
+    """
+    chunks: list[tuple[str | None, str]] = []
+    current_name: str | None = None
+    current_lines: list[str] = []
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if stripped.startswith("[") and stripped.rstrip().endswith("]") and not stripped.startswith("[["):
+            # New section header.
+            if current_lines or current_name is not None:
+                chunks.append((current_name, "".join(current_lines)))
+            header = stripped.strip()[1:-1].strip()
+            # We only track top-level sections; dotted names (e.g.
+            # "security.exec") become their own preserved chunk.
+            current_name = header
+            current_lines = [line]
+        else:
+            current_lines.append(line)
+    chunks.append((current_name, "".join(current_lines)))
+    return chunks
+
+
+def _merge_dicts(base: dict, override: dict) -> dict:
+    """Shallow merge per top-level section: override wins on key clash."""
+    out = {k: dict(v) if isinstance(v, dict) else v for k, v in base.items()}
+    for section, body in override.items():
+        if isinstance(body, dict) and isinstance(out.get(section), dict):
+            merged_section = dict(out[section])
+            merged_section.update(body)
+            out[section] = merged_section
+        else:
+            out[section] = body
+    return out
+
+
+def _merge_fetched_into_agent_toml(
+    *,
+    agent_toml: Path,
+    fetched_config: Path,
+    fetched_env: Path,
+) -> None:
+    existing_text = agent_toml.read_text() if agent_toml.exists() else ""
+    existing_tree = tomllib.loads(existing_text) if existing_text else {}
+
+    remote_cfg_tree = tomllib.loads(fetched_config.read_text())
+    env_map = _parse_env_file(fetched_env.read_text())
+
+    overrides = _config_to_agent_overrides(remote_cfg_tree)
+    env_overrides = _env_to_agent_overrides(env_map)
+    # env values (secrets, live provider) override config-derived values.
+    for section, body in env_overrides.items():
+        overrides.setdefault(section, {}).update(body)
+
+    merged_tree = _merge_dicts(existing_tree, overrides)
+
+    chunks = _split_into_sections(existing_text)
+    seen_managed: set[str] = set()
+    rendered: list[str] = []
+    for section_name, block in chunks:
+        if section_name is None:
+            # preamble (comments) — preserve as-is
+            rendered.append(block)
+            continue
+        top_level = section_name.split(".", 1)[0]
+        if top_level in _MANAGED_SECTIONS and section_name == top_level:
+            body = merged_tree.get(section_name, {})
+            if isinstance(body, dict):
+                rendered.append(_render_managed_section(section_name, body))
+                seen_managed.add(section_name)
+                continue
+        # Unknown section (e.g. user's [notes], or dotted [security.exec]) —
+        # preserve verbatim.
+        rendered.append(block)
+
+    # If the merged tree introduces a managed section that wasn't present
+    # in the existing file, append it.
+    for section in _MANAGED_SECTIONS:
+        if section in merged_tree and section not in seen_managed:
+            body = merged_tree[section]
+            if isinstance(body, dict) and body:
+                if rendered and not rendered[-1].endswith("\n"):
+                    rendered.append("\n")
+                rendered.append("\n" + _render_managed_section(section, body))
+
+    new_text = "".join(rendered)
+    # Ensure trailing newline.
+    if not new_text.endswith("\n"):
+        new_text += "\n"
+    agent_toml.write_text(new_text)
 
 
 def cmd_restore(name: str, ts: str | None = None, project_root: Path | None = None) -> int:
     cfg = load_config(project_root)
     archive = f".archive/{name}-{ts}" if ts else f"$(ls -dt .archive/{name}-* | head -1)"
     command = f"cd {REMOTE_BASE} && mv {archive} states/{name} && docker compose up -d {name}"
-    return _ssh(cfg, command).returncode
+    rc = _ssh(cfg, command).returncode
+    append_audit_line(
+        cfg,
+        actor=default_actor(),
+        cmd="agents.restore",
+        agent=name,
+        image=None,
+        result="ok" if rc == 0 else "fail",
+    )
+    return rc

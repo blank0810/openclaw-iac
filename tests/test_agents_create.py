@@ -9,7 +9,6 @@ def _template(root: Path) -> None:
     base = root / "agents" / "_template"
     (base / "workspace").mkdir(parents=True)
     (base / "agent.toml").write_text('name = "REPLACE_ME"\nstate_dir = "REPLACE_ME"\n')
-    (base / "cron.toml").write_text("")
     (base / "workspace" / "AGENTS.md").write_text("# REPLACE_ME\n")
 
 

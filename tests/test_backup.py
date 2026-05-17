@@ -39,5 +39,6 @@ def test_cmd_backup_all_enabled_agents(tmp_path, isolated_env, monkeypatch):
         return subprocess.CompletedProcess(args, 0)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr("lib.backup.append_audit_line", lambda *a, **k: None)
     assert cmd_backup(name=None, project_root=tmp_path) == 0
     assert count == 2

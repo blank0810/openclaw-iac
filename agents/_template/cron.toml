@@ -1,6 +1,0 @@
-# Optional scheduled jobs. Leave empty if not used.
-# Example:
-# [[jobs]]
-# name = "daily-summary"
-# schedule = "0 9 * * *"
-# prompt = "Summarize yesterday's activity"

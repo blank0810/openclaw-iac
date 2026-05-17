@@ -3,7 +3,7 @@ set -euo pipefail
 
 STATE_DIR=${PROBE_STATE_DIR:-/var/lib/zeroclaw-probe/default}
 STATE_FILE="$STATE_DIR/consecutive_failures"
-LOG_FILE=${PROBE_LOG_FILE:-/var/log/zeroclaw-probe.log}
+LOG_FILE=${PROBE_LOG_FILE:-/var/log/zeroclaw-slack-probe.log}
 CONTAINER=${CONTAINER_NAME:-zeroclaw}
 MAX_FAILURES=3
 ZOMBIE_WINDOW=6h

@@ -4,6 +4,7 @@ import socket
 import subprocess
 from pathlib import Path
 
+from lib.audit import append_audit_line, default_actor
 from lib.config import load_config
 
 
@@ -36,8 +37,7 @@ def _run_pyinfra(deploy_file: str, *, dry: bool = False) -> int:
     return subprocess.run(cmd, check=False).returncode
 
 
-def cmd_deploy(project_root: Path | None = None, dry: bool = False) -> int:
-    cfg = load_config(project_root)
+def _do_deploy(cfg, dry: bool) -> int:
     try:
         sock = socket.create_connection((cfg.server_host, 22), timeout=5)
         close = getattr(sock, "close", None)
@@ -66,3 +66,17 @@ def cmd_deploy(project_root: Path | None = None, dry: bool = False) -> int:
     if hardening:
         return hardening
     return _run_pyinfra("lib/deploy_runtime.py", dry=dry)
+
+
+def cmd_deploy(project_root: Path | None = None, dry: bool = False) -> int:
+    cfg = load_config(project_root)
+    rc = _do_deploy(cfg, dry)
+    append_audit_line(
+        cfg,
+        actor=default_actor(),
+        cmd="server.deploy",
+        agent=None,
+        image=None,
+        result="ok" if rc == 0 else "fail",
+    )
+    return rc

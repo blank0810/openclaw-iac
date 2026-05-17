@@ -44,4 +44,6 @@ The rewrite adds pytest coverage for config validation, template rendering, no-s
 
 ## Explicit N/A
 
-Remote object-storage backups are not implemented in this rewrite because the current operating model is a solo-dev single-host deployment. Cron job execution is scaffolded with `agents/<slug>/cron.toml` but not wired because scheduled job management was explicitly deferred from v1.
+Remote object-storage backups are not implemented in this rewrite because the current operating model is a solo-dev single-host deployment.
+
+Scheduled jobs are agent-managed in v1: the ZeroClaw runtime exposes `cron_add`/`cron_list`/`cron_remove`/`cron_run`/`cron_update` tools to the agent at chat time (see upstream `crates/zeroclaw-runtime/src/tools/cron_*.rs`). Operator-authored cron — a git-tracked `cron.json` reconciled to the runtime store via SSH, comparable to the nanobot pattern — is deferred to a future phase, at which point `lib/cron.py` and a per-agent `cron.json` will be introduced.

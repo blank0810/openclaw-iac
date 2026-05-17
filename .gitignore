@@ -28,5 +28,6 @@ credentials.json
 # zeroclawctl rewrite
 agents/
 !agents/_template/
+agents/*/.fetched/
 backups/
 .runtime-temp/
