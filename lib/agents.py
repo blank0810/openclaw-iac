@@ -40,18 +40,29 @@ def _agent_by_name(cfg: DeploymentConfig, name: str) -> AgentDefinition:
 
 
 def _ssh_base(cfg: DeploymentConfig) -> list[str]:
-    return ["ssh", "-p", str(cfg.ssh_port), f"{cfg.deploy_user}@{cfg.server_host}"]
+    return [
+        "ssh",
+        "-i",
+        str(cfg.deploy_ssh_key_path),
+        "-p",
+        str(cfg.ssh_port),
+        f"{cfg.deploy_user}@{cfg.server_host}",
+    ]
+
+
+def _scp_base(cfg: DeploymentConfig) -> list[str]:
+    return [
+        "scp",
+        "-i",
+        str(cfg.deploy_ssh_key_path),
+        "-P",
+        str(cfg.ssh_port),
+    ]
 
 
 def _scp_to(cfg: DeploymentConfig, local: Path, remote: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [
-            "scp",
-            "-P",
-            str(cfg.ssh_port),
-            str(local),
-            f"{cfg.deploy_user}@{cfg.server_host}:{remote}",
-        ],
+        _scp_base(cfg) + [str(local), f"{cfg.deploy_user}@{cfg.server_host}:{remote}"],
         check=False,
         text=True,
         capture_output=True,
@@ -470,10 +481,7 @@ def cmd_fetch(name: str, project_root: Path | None = None, force: bool = False) 
 
     # 1) Workspace markdowns (keep as the first scp — existing tests assert this).
     rc = subprocess.run(
-        [
-            "scp",
-            "-P",
-            str(cfg.ssh_port),
+        _scp_base(cfg) + [
             "-r",
             f"{cfg.deploy_user}@{cfg.server_host}:{remote_state}/workspace/*.md",
             str(dest / "workspace"),
@@ -487,13 +495,13 @@ def cmd_fetch(name: str, project_root: Path | None = None, force: bool = False) 
     remote_config = f"{cfg.deploy_user}@{cfg.server_host}:{remote_state}/config.toml"
     remote_env = f"{cfg.deploy_user}@{cfg.server_host}:{remote_state}/zeroclaw.env"
     rc = subprocess.run(
-        ["scp", "-P", str(cfg.ssh_port), remote_config, str(fetched / "config.toml")],
+        _scp_base(cfg) + [remote_config, str(fetched / "config.toml")],
         check=False,
     ).returncode
     if rc != 0:
         return rc
     rc = subprocess.run(
-        ["scp", "-P", str(cfg.ssh_port), remote_env, str(fetched / "zeroclaw.env")],
+        _scp_base(cfg) + [remote_env, str(fetched / "zeroclaw.env")],
         check=False,
     ).returncode
     if rc != 0:

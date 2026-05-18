@@ -33,6 +33,8 @@ def cmd_backup(name: str | None, project_root: Path | None = None) -> int:
             result = subprocess.run(
                 [
                     "ssh",
+                    "-i",
+                    str(cfg.deploy_ssh_key_path),
                     "-p",
                     str(cfg.ssh_port),
                     f"{cfg.deploy_user}@{cfg.server_host}",

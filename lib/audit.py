@@ -67,6 +67,8 @@ def append_audit_line(
         subprocess.run(
             [
                 "ssh",
+                "-i",
+                str(cfg.deploy_ssh_key_path),
                 "-p",
                 str(cfg.ssh_port),
                 f"{cfg.deploy_user}@{cfg.server_host}",
@@ -93,6 +95,8 @@ def cmd_audit(
     return subprocess.run(
         [
             "ssh",
+            "-i",
+            str(cfg.deploy_ssh_key_path),
             "-p",
             str(cfg.ssh_port),
             f"{cfg.deploy_user}@{cfg.server_host}",

@@ -20,11 +20,23 @@ def _agent(cfg: DeploymentConfig, name: str) -> AgentDefinition:
 
 def _ssh(cfg: DeploymentConfig, command: str, *, capture: bool = False):
     return subprocess.run(
-        ["ssh", "-p", str(cfg.ssh_port), f"{cfg.deploy_user}@{cfg.server_host}", command],
+        [
+            "ssh",
+            "-i",
+            str(cfg.deploy_ssh_key_path),
+            "-p",
+            str(cfg.ssh_port),
+            f"{cfg.deploy_user}@{cfg.server_host}",
+            command,
+        ],
         check=False,
         text=True,
         capture_output=capture,
     )
+
+
+def _scp_base(cfg: DeploymentConfig) -> list[str]:
+    return ["scp", "-i", str(cfg.deploy_ssh_key_path), "-P", str(cfg.ssh_port)]
 
 
 def _remote_workspace(agent: AgentDefinition) -> str:
@@ -80,10 +92,7 @@ def cmd_fetch(name: str, project_root: Path | None = None, force: bool = False) 
         return 1
     dest.mkdir(parents=True, exist_ok=True)
     return subprocess.run(
-        [
-            "scp",
-            "-P",
-            str(cfg.ssh_port),
+        _scp_base(cfg) + [
             f"{cfg.deploy_user}@{cfg.server_host}:{_remote_workspace(agent)}/*.md",
             str(dest),
         ],
@@ -109,10 +118,7 @@ def cmd_deploy(name: str, project_root: Path | None = None, force: bool = False)
     rc = 0
     for path in sorted(workspace.glob("*.md")):
         result = subprocess.run(
-            [
-                "scp",
-                "-P",
-                str(cfg.ssh_port),
+            _scp_base(cfg) + [
                 str(path),
                 f"{cfg.deploy_user}@{cfg.server_host}:{_remote_workspace(agent)}/{path.name}",
             ],
