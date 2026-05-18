@@ -30,7 +30,7 @@ def test_cmd_deploy_renders_uploads_and_recreates(tmp_path, isolated_env, monkey
 
     def fake_run(args, **kwargs):
         calls.append(list(args))
-        if args[0] == "ssh" and args[-1].startswith("cat "):
+        if args[0] == "ssh" and "sudo cat" in args[-1]:
             return subprocess.CompletedProcess(args, 0, stdout="# AGENTS\n", stderr="")
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
@@ -42,3 +42,21 @@ def test_cmd_deploy_renders_uploads_and_recreates(tmp_path, isolated_env, monkey
     assert any(call[0] == "scp" and "zeroclaw.env" in call[-2] for call in calls)
     assert any("chmod 0600" in call[-1] for call in calls if call[0] == "ssh")
     assert any("docker compose up -d --force-recreate acme" in call[-1] for call in calls)
+    # New layout assertions: config.toml goes through /tmp + sudo mv to .zeroclaw/
+    assert any(
+        call[0] == "scp" and "/tmp/zeroclawctl-acme-config.toml" in call[-1]
+        for call in calls
+    ), "config.toml must scp to /tmp first (state dir's .zeroclaw is 65534-owned)"
+    assert any(
+        call[0] == "ssh" and ".zeroclaw/config.toml" in call[-1] and "sudo mv" in call[-1]
+        for call in calls
+    ), "config.toml must sudo-mv into .zeroclaw/ subdir"
+    assert any(
+        call[0] == "ssh" and "sudo chown 65534:65534" in call[-1]
+        and ".zeroclaw" in call[-1]
+        for call in calls
+    ), "container must own .zeroclaw/ + its config.toml"
+    assert any(
+        call[0] == "ssh" and "sudo mkdir -p" in call[-1] and "/.zeroclaw" in call[-1]
+        for call in calls
+    ), "cmd_deploy must create .zeroclaw subdir (idempotent)"

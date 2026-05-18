@@ -252,14 +252,37 @@ def cmd_deploy(name: str, project_root: Path | None = None, pull_image: bool = F
     rc = 1
     try:
         remote_state = f"{REMOTE_BASE}/states/{agent.state_dir}"
-        _ssh(cfg, f"mkdir -p {remote_state}/workspace {remote_state}/workspace/sessions")
-        _scp_to(cfg, env_path, f"{remote_state}/zeroclaw.env")
-        _scp_to(cfg, staged / "config.toml", f"{remote_state}/config.toml")
-        _ssh(cfg, f"chmod 0600 {remote_state}/zeroclaw.env && chmod 0644 {remote_state}/config.toml")
+        # Idempotent dir setup. State dir owned by deploy user (writes happen
+        # there over scp). .zeroclaw + workspace owned by container user 65534
+        # — matches what upstream expects when resolving $HOME/.zeroclaw and
+        # gives the container write access to brain.db / sessions / cron.
+        _ssh(cfg, (
+            f"sudo mkdir -p {remote_state}/.zeroclaw {remote_state}/workspace "
+            f"{remote_state}/workspace/sessions {remote_state}/workspace/sessions/archive && "
+            f"sudo chown {cfg.deploy_user}:{cfg.deploy_user} {remote_state} && "
+            f"sudo chown -R 65534:65534 {remote_state}/.zeroclaw {remote_state}/workspace"
+        ))
 
+        # zeroclaw.env stays at state-dir level — it's a host-side env_file
+        # for docker compose, never bind-mounted into the container.
+        _scp_to(cfg, env_path, f"{remote_state}/zeroclaw.env")
+        _ssh(cfg, f"chmod 0600 {remote_state}/zeroclaw.env")
+
+        # config.toml goes into .zeroclaw/ (matches compose mount; container
+        # needs to own it because the dir is 65534-owned). scp to /tmp first,
+        # then sudo mv into the 65534-owned dir.
+        _scp_to(cfg, staged / "config.toml", f"/tmp/zeroclawctl-{agent.name}-config.toml")
+        _ssh(cfg, (
+            f"sudo mv /tmp/zeroclawctl-{agent.name}-config.toml "
+            f"{remote_state}/.zeroclaw/config.toml && "
+            f"sudo chown 65534:65534 {remote_state}/.zeroclaw/config.toml && "
+            f"sudo chmod 0640 {remote_state}/.zeroclaw/config.toml"
+        ))
+
+        # AGENTS.md lives inside the 65534-owned workspace — sudo for read + write.
         existing_agents = _ssh(
             cfg,
-            f"cat {remote_state}/workspace/AGENTS.md 2>/dev/null || true",
+            f"sudo cat {remote_state}/workspace/AGENTS.md 2>/dev/null || true",
             capture=True,
         ).stdout
         policy = build_policy_block(
@@ -267,7 +290,13 @@ def cmd_deploy(name: str, project_root: Path | None = None, pull_image: bool = F
             denied_domains=agent.policy.denied_domains,
         )
         (staged / "AGENTS.md").write_text(inject_policy_block(existing_agents or "", policy))
-        _scp_to(cfg, staged / "AGENTS.md", f"{remote_state}/workspace/AGENTS.md")
+        _scp_to(cfg, staged / "AGENTS.md", f"/tmp/zeroclawctl-{agent.name}-AGENTS.md")
+        _ssh(cfg, (
+            f"sudo mv /tmp/zeroclawctl-{agent.name}-AGENTS.md "
+            f"{remote_state}/workspace/AGENTS.md && "
+            f"sudo chown 65534:65534 {remote_state}/workspace/AGENTS.md && "
+            f"sudo chmod 0644 {remote_state}/workspace/AGENTS.md"
+        ))
 
         if pull_image:
             _ssh(cfg, f"cd {REMOTE_BASE} && docker pull {agent.image or cfg.zeroclaw_image}")

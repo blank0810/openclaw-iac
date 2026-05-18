@@ -6,9 +6,11 @@ services:
     restart: unless-stopped
     env_file:
       - ./states/{{ a.state_dir }}/zeroclaw.env
+    environment:
+      ZEROCLAW_WORKSPACE: /zeroclaw-data/workspace
     volumes:
-      - ./states/{{ a.state_dir }}/config.toml:/zeroclaw/config.toml:ro
-      - ./states/{{ a.state_dir }}/workspace:/zeroclaw/workspace
+      - ./states/{{ a.state_dir }}/.zeroclaw/config.toml:/zeroclaw-data/.zeroclaw/config.toml:ro
+      - ./states/{{ a.state_dir }}/workspace:/zeroclaw-data/workspace
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m

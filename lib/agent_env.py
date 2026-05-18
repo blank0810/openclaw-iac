@@ -14,7 +14,7 @@ def build_agent_env(agent: AgentDefinition) -> dict[str, str]:
     env: dict[str, str] = {
         "ZEROCLAW_PROVIDER": agent.llm.provider,
         "ZEROCLAW_MODEL": agent.llm.model,
-        "ZEROCLAW_WORKSPACE": "/zeroclaw/workspace",
+        "ZEROCLAW_WORKSPACE": "/zeroclaw-data/workspace",
         "ZEROCLAW_PROVIDER_TIMEOUT_SECS": str(agent.llm.timeout_secs),
     }
     if agent.llm.api_key:

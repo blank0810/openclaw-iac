@@ -86,17 +86,18 @@ for path in (remote_base_dir, f"{remote_base_dir}/states", f"{remote_base_dir}/.
 
 for agent in agents:
     state_dir = agent["state_dir"]
-    for relpath in ("", "workspace", "workspace/sessions", "workspace/sessions/archive"):
+    for relpath in ("", ".zeroclaw", "workspace", "workspace/sessions", "workspace/sessions/archive"):
         path = f"{remote_base_dir}/states/{state_dir}"
         if relpath:
             path = f"{path}/{relpath}"
+        container_owned = relpath.startswith("workspace") or relpath == ".zeroclaw"
         files.directory(
             name=f"Ensure agent directory {path}",
             path=path,
             present=True,
-            user="65534" if relpath.startswith("workspace") else deploy_user,
-            group="65534" if relpath.startswith("workspace") else deploy_user,
-            mode="755" if relpath.startswith("workspace") else "750",
+            user="65534" if container_owned else deploy_user,
+            group="65534" if container_owned else deploy_user,
+            mode="755" if container_owned else "750",
             _sudo=True,
         )
 

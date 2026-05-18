@@ -14,7 +14,7 @@ def test_zeroclaw_env_removed_from_runtime_temp_after_deploy(tmp_path, isolated_
     _write_agent(tmp_path, "acme")
 
     def fake_run(args, **kwargs):
-        if args[0] == "ssh" and args[-1].startswith("cat "):
+        if args[0] == "ssh" and "sudo cat" in args[-1]:
             return subprocess.CompletedProcess(args, 0, stdout="# AGENTS\n", stderr="")
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
@@ -45,7 +45,7 @@ def test_zeroclaw_env_has_mode_0600_during_scp(tmp_path, isolated_env, monkeypat
     monkeypatch.setattr(agents_module, "_scp_to", spying_scp_to)
 
     def fake_run(args, **kwargs):
-        if args[0] == "ssh" and args[-1].startswith("cat "):
+        if args[0] == "ssh" and "sudo cat" in args[-1]:
             return subprocess.CompletedProcess(args, 0, stdout="# AGENTS\n", stderr="")
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
@@ -71,7 +71,7 @@ def test_zeroclaw_env_removed_even_if_later_step_raises(tmp_path, isolated_env, 
         # Make the final docker compose up step raise.
         if args[0] == "ssh" and "docker compose up" in args[-1]:
             raise RuntimeError("boom")
-        if args[0] == "ssh" and args[-1].startswith("cat "):
+        if args[0] == "ssh" and "sudo cat" in args[-1]:
             return subprocess.CompletedProcess(args, 0, stdout="# AGENTS\n", stderr="")
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 

@@ -142,5 +142,7 @@ def test_provider_metadata_always_present():
     env = build_agent_env(_agent())
     assert env["ZEROCLAW_PROVIDER"] == "anthropic"
     assert env["ZEROCLAW_MODEL"] == "claude-sonnet-4-5"
-    assert env["ZEROCLAW_WORKSPACE"] == "/zeroclaw/workspace"
+    # /zeroclaw-data/workspace matches the compose mount target.
+    # /zeroclaw/workspace would land on the read-only container root and crash.
+    assert env["ZEROCLAW_WORKSPACE"] == "/zeroclaw-data/workspace"
     assert env["ZEROCLAW_PROVIDER_TIMEOUT_SECS"] == "60"

@@ -79,3 +79,23 @@ def test_compose_renders_per_agent_network(env):
     out = env.get_template("docker-compose.yml.j2").render(config=cfg)
     assert "zc-acme:" in out
     assert "zc-globex:" in out
+
+
+def test_compose_mounts_config_in_zeroclaw_subdir(env):
+    """ZeroClaw resolves config to $HOME/.zeroclaw/config.toml. Mount must
+    match — putting config.toml at the state-dir root crashes the container
+    with 'Failed to create config directory' on the read-only root FS."""
+    cfg = _fake_config([_fake_agent(name="acme")])
+    out = env.get_template("docker-compose.yml.j2").render(config=cfg)
+    assert "./states/acme/.zeroclaw/config.toml:/zeroclaw-data/.zeroclaw/config.toml:ro" in out
+    assert "./states/acme/workspace:/zeroclaw-data/workspace" in out
+    # The read-only-root /zeroclaw mount path must NOT appear (was the crash bug)
+    assert "/zeroclaw/config.toml" not in out
+    assert "/zeroclaw/workspace" not in out
+
+
+def test_compose_sets_zeroclaw_workspace_env(env):
+    """Container expects ZEROCLAW_WORKSPACE to point at the bind-mounted dir."""
+    cfg = _fake_config([_fake_agent(name="acme")])
+    out = env.get_template("docker-compose.yml.j2").render(config=cfg)
+    assert "ZEROCLAW_WORKSPACE: /zeroclaw-data/workspace" in out
