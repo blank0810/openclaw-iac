@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import getpass
 import os
+import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -66,7 +68,64 @@ def _template_env(project_root: Path) -> Environment:
     return Environment(loader=FileSystemLoader(search_paths))
 
 
-def cmd_create(name: str, project_root: Path | None = None) -> int:
+_SECTION_RE_CACHE: dict[str, re.Pattern] = {}
+
+
+def _section_re(section: str) -> re.Pattern:
+    """Pattern matching a single `[section]` body up to next section or EOF."""
+    if section not in _SECTION_RE_CACHE:
+        _SECTION_RE_CACHE[section] = re.compile(
+            rf'\[{re.escape(section)}\][\s\S]*?(?=\n\[|\Z)',
+            re.DOTALL,
+        )
+    return _SECTION_RE_CACHE[section]
+
+
+def _replace_in_section(text: str, section: str, body_pattern: str, replacement: str) -> str:
+    """Find [section] block, run a sub within it. No-op if section absent or key not found."""
+    match = _section_re(section).search(text)
+    if not match:
+        return text
+    section_text = match.group(0)
+    new_section, n = re.subn(body_pattern, lambda _m: replacement, section_text, count=1)
+    if n == 0:
+        return text
+    return text[: match.start()] + new_section + text[match.end() :]
+
+
+def _replace_string_in_section(text: str, section: str, key: str, value: str) -> str:
+    return _replace_in_section(
+        text, section, rf'{re.escape(key)}\s*=\s*"[^"]*"', f'{key} = "{value}"'
+    )
+
+
+def _replace_bool_in_section(text: str, section: str, key: str, value: bool) -> str:
+    token = "true" if value else "false"
+    return _replace_in_section(
+        text, section, rf'{re.escape(key)}\s*=\s*(?:true|false)', f'{key} = {token}'
+    )
+
+
+def _redact(token: str, head: int = 8, tail: int = 6) -> str:
+    if len(token) <= head + tail:
+        return "***"
+    return f"{token[:head]}...***{token[-tail:]}"
+
+
+def cmd_create(
+    name: str,
+    *,
+    slack: bool = False,
+    composio: bool = False,
+    display_name: str | None = None,
+    slack_bot_token: str | None = None,
+    slack_app_token: str | None = None,
+    slack_channel_id: str | None = None,
+    composio_mcp_key: str | None = None,
+    project_root: Path | None = None,
+    _input=input,
+    _getpass=getpass.getpass,
+) -> int:
     project_root = Path(project_root) if project_root else Path.cwd()
     if not SLUG_PATTERN.match(name):
         print(f"invalid agent slug: {name}")
@@ -76,10 +135,97 @@ def cmd_create(name: str, project_root: Path | None = None) -> int:
     if dest.exists():
         print(f"agent already exists: {name}")
         return 1
+
+    # Activation: explicit boolean flag = interactive prompts;
+    # any passthrough flag also activates the section but skips prompts.
+    slack_active = slack or any(
+        v is not None for v in (slack_bot_token, slack_app_token, slack_channel_id)
+    )
+    composio_active = composio or composio_mcp_key is not None
+    slack_interactive = slack and not any(
+        v is not None for v in (slack_bot_token, slack_app_token, slack_channel_id)
+    )
+    composio_interactive = composio and composio_mcp_key is None
+
+    try:
+        if display_name is None:
+            if slack_interactive or composio_interactive:
+                answer = _input(f"Display name [{name}]: ").strip()
+                display_name = answer or name
+            else:
+                display_name = name
+
+        if slack_interactive:
+            if slack_bot_token is None:
+                slack_bot_token = _getpass("Slack bot token (xoxb-...): ").strip()
+                if slack_bot_token and not slack_bot_token.startswith("xoxb-"):
+                    print("warning: bot token does not start with xoxb-")
+            if slack_app_token is None:
+                slack_app_token = _getpass("Slack app token (xapp-...): ").strip()
+                if slack_app_token and not slack_app_token.startswith("xapp-"):
+                    print("warning: app token does not start with xapp-")
+            if slack_channel_id is None:
+                slack_channel_id = _input(
+                    "Slack channel ID to scope to (blank for all): "
+                ).strip()
+
+        if composio_interactive:
+            composio_mcp_key = _getpass(
+                "Composio MCP API key (ck_..., blank to inherit from _defaults.toml): "
+            ).strip()
+            if composio_mcp_key and not composio_mcp_key.startswith("ck_"):
+                print("warning: Composio MCP key does not start with ck_")
+    except (EOFError, KeyboardInterrupt):
+        print("\naborted; no files created")
+        return 1
+
     shutil.copytree(src, dest)
     agent_toml = dest / "agent.toml"
-    if agent_toml.exists():
-        agent_toml.write_text(agent_toml.read_text().replace("REPLACE_ME", name))
+    if not agent_toml.exists():
+        print(f"template missing agent.toml at {src}")
+        shutil.rmtree(dest, ignore_errors=True)
+        return 1
+
+    text = agent_toml.read_text().replace("REPLACE_ME", name)
+    text = _replace_string_in_section(text, "identity", "display_name", display_name)
+    if slack_active:
+        text = _replace_bool_in_section(text, "slack", "enabled", True)
+        if slack_bot_token:
+            text = _replace_string_in_section(text, "slack", "bot_token", slack_bot_token)
+        if slack_app_token:
+            text = _replace_string_in_section(text, "slack", "app_token", slack_app_token)
+        if slack_channel_id:
+            text = _replace_string_in_section(text, "slack", "channel_id", slack_channel_id)
+    if composio_active:
+        text = _replace_bool_in_section(text, "composio", "enabled", True)
+        if composio_mcp_key:
+            text = _replace_string_in_section(
+                text, "composio", "mcp_api_key", composio_mcp_key
+            )
+
+    agent_toml.write_text(text)
+    try:
+        os.chmod(agent_toml, 0o600)
+    except OSError:
+        pass
+
+    print(f"created: agents/{name}/agent.toml (mode 0600)")
+    print(f"  display_name        {display_name}")
+    if slack_active:
+        print(f"  slack.enabled       true")
+        if slack_bot_token:
+            print(f"  slack.bot_token     {_redact(slack_bot_token)}")
+        if slack_app_token:
+            print(f"  slack.app_token     {_redact(slack_app_token)}")
+        if slack_channel_id:
+            print(f"  slack.channel_id    {slack_channel_id}")
+    if composio_active:
+        print(f"  composio.enabled    true")
+        if composio_mcp_key:
+            print(f"  composio.mcp_api_key {_redact(composio_mcp_key)}")
+    print(f"\nNext:\n  zeroclawctl agents deploy --name {name}")
+    if slack_active:
+        print(f"  /invite @{display_name}  (in each Slack channel you want the bot in)")
     return 0
 
 

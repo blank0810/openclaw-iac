@@ -27,7 +27,36 @@ def build_parser() -> argparse.ArgumentParser:
 
     create = agents_sub.add_parser("create")
     create.add_argument("--name", required=True)
-    create.set_defaults(func=lambda args: agents.cmd_create(args.name))
+    create.add_argument("--display-name")
+    create.add_argument(
+        "--slack",
+        action="store_true",
+        help="enable Slack and prompt for tokens (or pass --slack-bot-token etc.)",
+    )
+    create.add_argument("--slack-bot-token", help="xoxb-... (skips prompt; enables Slack)")
+    create.add_argument("--slack-app-token", help="xapp-... (skips prompt; enables Slack)")
+    create.add_argument("--slack-channel-id", help="scope bot to one channel")
+    create.add_argument(
+        "--composio",
+        action="store_true",
+        help="enable Composio and prompt for MCP key (or pass --composio-mcp-key)",
+    )
+    create.add_argument(
+        "--composio-mcp-key",
+        help="ck_... (skips prompt; enables Composio; blank inherits from _defaults.toml)",
+    )
+    create.set_defaults(
+        func=lambda args: agents.cmd_create(
+            args.name,
+            slack=args.slack,
+            composio=args.composio,
+            display_name=args.display_name,
+            slack_bot_token=args.slack_bot_token,
+            slack_app_token=args.slack_app_token,
+            slack_channel_id=args.slack_channel_id,
+            composio_mcp_key=args.composio_mcp_key,
+        )
+    )
 
     deploy = agents_sub.add_parser("deploy")
     deploy.add_argument("--name", required=True)
