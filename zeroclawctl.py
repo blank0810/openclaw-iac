@@ -20,7 +20,16 @@ def build_parser() -> argparse.ArgumentParser:
     server_sub = server_parser.add_subparsers(dest="server_command", required=True)
     server_deploy = server_sub.add_parser("deploy")
     server_deploy.add_argument("--dry", action="store_true")
-    server_deploy.set_defaults(func=lambda args: server.cmd_deploy(dry=args.dry))
+    server_deploy.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Pyinfra verbosity (-v shell output, -vv operation detail, -vvv all)",
+    )
+    server_deploy.set_defaults(
+        func=lambda args: server.cmd_deploy(dry=args.dry, verbose=args.verbose)
+    )
 
     agents_parser = sub.add_parser("agents")
     agents_sub = agents_parser.add_subparsers(dest="agent_command", required=True)

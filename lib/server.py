@@ -30,14 +30,16 @@ def _ssh_check(host: str, user: str, port: int, key_path: Path) -> bool:
     return result.returncode == 0
 
 
-def _run_pyinfra(deploy_file: str, *, dry: bool = False) -> int:
-    cmd = ["pyinfra", "lib/inventory.py", deploy_file]
+def _run_pyinfra(deploy_file: str, *, dry: bool = False, verbose: int = 0) -> int:
+    cmd = ["pyinfra", "-y", "lib/inventory.py", deploy_file]
     if dry:
         cmd.append("--dry")
+    if verbose > 0:
+        cmd.append("-" + ("v" * min(verbose, 3)))
     return subprocess.run(cmd, check=False).returncode
 
 
-def _do_deploy(cfg, dry: bool) -> int:
+def _do_deploy(cfg, dry: bool, verbose: int = 0) -> int:
     try:
         sock = socket.create_connection((cfg.server_host, 22), timeout=5)
         close = getattr(sock, "close", None)
@@ -48,13 +50,13 @@ def _do_deploy(cfg, dry: bool) -> int:
         return 1
 
     if _ssh_check(cfg.server_host, cfg.deploy_user, cfg.ssh_port, cfg.deploy_ssh_key_path):
-        return _run_pyinfra("lib/deploy_runtime.py", dry=dry)
+        return _run_pyinfra("lib/deploy_runtime.py", dry=dry, verbose=verbose)
 
     if not _ssh_check(cfg.server_host, "root", 22, cfg.root_ssh_key_path):
         print("cannot auth as deploy user or root")
         return 1
 
-    prepare = _run_pyinfra("lib/bootstrap_prepare.py", dry=dry)
+    prepare = _run_pyinfra("lib/bootstrap_prepare.py", dry=dry, verbose=verbose)
     if prepare:
         return prepare
 
@@ -62,15 +64,15 @@ def _do_deploy(cfg, dry: bool) -> int:
         print("deploy-user SSH key verification failed; refusing hardening")
         return 1
 
-    hardening = _run_pyinfra("lib/bootstrap_hardening.py", dry=dry)
+    hardening = _run_pyinfra("lib/bootstrap_hardening.py", dry=dry, verbose=verbose)
     if hardening:
         return hardening
-    return _run_pyinfra("lib/deploy_runtime.py", dry=dry)
+    return _run_pyinfra("lib/deploy_runtime.py", dry=dry, verbose=verbose)
 
 
-def cmd_deploy(project_root: Path | None = None, dry: bool = False) -> int:
+def cmd_deploy(project_root: Path | None = None, dry: bool = False, verbose: int = 0) -> int:
     cfg = load_config(project_root)
-    rc = _do_deploy(cfg, dry)
+    rc = _do_deploy(cfg, dry, verbose=verbose)
     append_audit_line(
         cfg,
         actor=default_actor(),
