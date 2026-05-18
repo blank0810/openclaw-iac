@@ -101,6 +101,15 @@ for agent in agents:
             _sudo=True,
         )
 
+# Template expects a `config` namespace with .agents + .zeroclaw_image
+# (matching how tests render it via `env.get_template(...).render(config=cfg)`).
+# Pyinfra's _server_inventory pops the full DeploymentConfig out of host.data
+# before serializing it, so we rebuild a dict-shaped equivalent here.
+_compose_config = type("_C", (), {
+    "agents": agents,
+    "zeroclaw_image": host.data.get("zeroclaw_image"),
+})()
+
 files.template(
     name="Render shared ZeroClaw docker-compose.yml",
     src="templates/docker-compose.yml.j2",
@@ -108,6 +117,7 @@ files.template(
     user=deploy_user,
     group=deploy_user,
     mode="0644",
+    config=_compose_config,
     _sudo=True,
 )
 
