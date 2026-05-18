@@ -217,8 +217,10 @@ def test_create_composio_flag_prompts_for_mcp_key(tmp_path):
     assert "[composio]\nenabled = true" in toml
 
 
-def test_create_composio_blank_key_still_enables(tmp_path):
-    """Blank MCP key (inherit from _defaults.toml) is valid - just flip enabled=true."""
+def test_create_composio_blank_key_disables_composio_with_warning(tmp_path, capsys):
+    """Blank MCP key disables Composio. Earlier design assumed defaults could
+    supply mcp_api_key, but it's per-agent — empty key + enabled=true would
+    fail ComposioConfig validation and silently skip workspace render."""
     _scaffold_template(tmp_path)
     prompter = _make_prompter({"Display name": "Inherit", "MCP API key": ""})
     rc = cmd_create(
@@ -229,10 +231,12 @@ def test_create_composio_blank_key_still_enables(tmp_path):
         _getpass=prompter,
     )
     assert rc == 0
+    captured = capsys.readouterr()
+    assert "no Composio MCP key" in captured.out
+    assert "disabling Composio" in captured.out
     toml = (tmp_path / "agents" / "inherit" / "agent.toml").read_text()
-    assert "[composio]\nenabled = true" in toml
-    # mcp_api_key stays empty (inherit from defaults)
-    assert 'mcp_api_key = ""' in toml
+    # composio.enabled was NOT flipped to true since key was missing
+    assert "[composio]\nenabled = false" in toml
 
 
 def test_create_chmod_0600(tmp_path):

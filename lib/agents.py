@@ -246,9 +246,15 @@ def cmd_create(
 
         if composio_interactive:
             composio_mcp_key = _getpass(
-                "Composio MCP API key (ck_..., blank to inherit from _defaults.toml): "
+                "Composio MCP API key (ck_...) — required when --composio is set: "
             ).strip()
-            if composio_mcp_key and not composio_mcp_key.startswith("ck_"):
+            if not composio_mcp_key:
+                print(
+                    "warning: no Composio MCP key provided; disabling Composio for "
+                    "this agent (re-run with --composio-mcp-key or paste a ck_ value)"
+                )
+                composio_active = False
+            elif not composio_mcp_key.startswith("ck_"):
                 print("warning: Composio MCP key does not start with ck_")
     except (EOFError, KeyboardInterrupt):
         print("\naborted; no files created")
