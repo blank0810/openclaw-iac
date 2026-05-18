@@ -113,6 +113,34 @@ def _replace_bool_in_section(text: str, section: str, key: str, value: bool) -> 
     )
 
 
+def _append_to_section(text: str, section: str, line: str) -> str:
+    """Append a line to the end of a [section] block. No-op if section absent."""
+    match = _section_re(section).search(text)
+    if not match:
+        return text
+    section_text = match.group(0).rstrip()
+    new_section = f"{section_text}\n{line}\n"
+    return text[: match.start()] + new_section + text[match.end() :]
+
+
+def _set_string_in_section(text: str, section: str, key: str, value: str) -> str:
+    """Set `key = "value"` in [section]. Replaces existing key, or appends if missing.
+    Required for fields that inherit from _defaults.toml — an empty placeholder in
+    the per-agent file would override the default."""
+    replaced = _replace_string_in_section(text, section, key, value)
+    if replaced != text:
+        return replaced
+    return _append_to_section(text, section, f'{key} = "{value}"')
+
+
+def _set_bool_in_section(text: str, section: str, key: str, value: bool) -> str:
+    replaced = _replace_bool_in_section(text, section, key, value)
+    if replaced != text:
+        return replaced
+    token = "true" if value else "false"
+    return _append_to_section(text, section, f"{key} = {token}")
+
+
 def _redact(token: str, head: int = 8, tail: int = 6) -> str:
     if len(token) <= head + tail:
         return "***"
@@ -234,19 +262,19 @@ def cmd_create(
         return 1
 
     text = agent_toml.read_text().replace("REPLACE_ME", name)
-    text = _replace_string_in_section(text, "identity", "display_name", display_name)
+    text = _set_string_in_section(text, "identity", "display_name", display_name)
     if slack_active:
-        text = _replace_bool_in_section(text, "slack", "enabled", True)
+        text = _set_bool_in_section(text, "slack", "enabled", True)
         if slack_bot_token:
-            text = _replace_string_in_section(text, "slack", "bot_token", slack_bot_token)
+            text = _set_string_in_section(text, "slack", "bot_token", slack_bot_token)
         if slack_app_token:
-            text = _replace_string_in_section(text, "slack", "app_token", slack_app_token)
+            text = _set_string_in_section(text, "slack", "app_token", slack_app_token)
         if slack_channel_id:
-            text = _replace_string_in_section(text, "slack", "channel_id", slack_channel_id)
+            text = _set_string_in_section(text, "slack", "channel_id", slack_channel_id)
     if composio_active:
-        text = _replace_bool_in_section(text, "composio", "enabled", True)
+        text = _set_bool_in_section(text, "composio", "enabled", True)
         if composio_mcp_key:
-            text = _replace_string_in_section(
+            text = _set_string_in_section(
                 text, "composio", "mcp_api_key", composio_mcp_key
             )
 

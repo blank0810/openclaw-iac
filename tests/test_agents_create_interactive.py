@@ -282,6 +282,63 @@ def test_create_warns_on_bad_token_prefix(tmp_path, capsys):
     assert "xoxb-" in captured.out
 
 
+def test_create_composio_inserts_key_when_template_omits_it(tmp_path):
+    """Regression: previous template had `mcp_url = ""` which overrode the
+    _defaults.toml URL via deep merge, breaking ComposioConfig validation.
+    With the cleaner template that omits mcp_url, --composio must still
+    produce a valid file by INSERTING the mcp_api_key key into the section
+    rather than only replacing existing placeholders.
+    """
+    base = tmp_path / "agents" / "_template"
+    (base / "workspace").mkdir(parents=True)
+    # Minimal template that has [composio] but no mcp_api_key line
+    (base / "agent.toml").write_text(
+        '[identity]\n'
+        'name = "REPLACE_ME"\n'
+        'display_name = "REPLACE_ME"\n'
+        'state_dir = "REPLACE_ME"\n'
+        '\n[composio]\n'
+        'enabled = false\n'
+    )
+    (base / "workspace" / "AGENTS.md").write_text("# REPLACE_ME\n")
+
+    rc = cmd_create(
+        "ck-test",
+        composio_mcp_key="ck_test_FROM_FLAG",
+        project_root=tmp_path,
+    )
+    assert rc == 0
+    toml = (tmp_path / "agents" / "ck-test" / "agent.toml").read_text()
+    # Both keys are present, even though only `enabled` had a placeholder
+    assert "[composio]\nenabled = true" in toml
+    assert 'mcp_api_key = "ck_test_FROM_FLAG"' in toml
+
+
+def test_create_slack_inserts_tokens_when_template_omits_them(tmp_path):
+    """Same regression for Slack tokens. Minimal template scaffolds without
+    placeholders must still pick up tokens via insertion."""
+    base = tmp_path / "agents" / "_template"
+    (base / "workspace").mkdir(parents=True)
+    (base / "agent.toml").write_text(
+        '[identity]\n'
+        'name = "REPLACE_ME"\n'
+        'state_dir = "REPLACE_ME"\n'
+        '\n[slack]\n'
+        'enabled = false\n'
+    )
+
+    rc = cmd_create(
+        "slim-bot",
+        slack_bot_token="xoxb-slim",
+        slack_app_token="xapp-slim",
+        project_root=tmp_path,
+    )
+    assert rc == 0
+    toml = (tmp_path / "agents" / "slim-bot" / "agent.toml").read_text()
+    assert 'bot_token = "xoxb-slim"' in toml
+    assert 'app_token = "xapp-slim"' in toml
+
+
 def test_create_redacts_tokens_in_summary(tmp_path, capsys):
     """Summary output shows token only as prefix/suffix; the middle is masked."""
     _scaffold_template(tmp_path)

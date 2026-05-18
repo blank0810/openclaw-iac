@@ -2,6 +2,9 @@
 # This file holds REAL SECRETS (Composio MCP key, Slack tokens). The agents/
 # directory is gitignored except for this template. On the deploy host, chmod
 # the rendered agents/<slug>/agent.toml to 0600 so other users can't read it.
+#
+# Fields not listed here inherit from agents/_defaults.toml. Add a key
+# locally only when you want to override the default.
 
 [identity]
 name = "REPLACE_ME"
@@ -15,56 +18,30 @@ state_dir = "REPLACE_ME"
 host_port = 0    # 0 = no host port exposed (default)
 
 [llm]
-# Anthropic key flows via env (ZEROCLAW_API_KEY) - upstream reads it from
-# environment. NOT rendered into config.toml.
-provider = "anthropic"      # anthropic | litellm
-model = "claude-sonnet-4-5"
-api_key = ""                # SECRET - kept env-only
-timeout_secs = 60
+# Inherits provider, model, api_key, timeout_secs from _defaults.toml.
+# Override here only if this agent needs a different model or provider.
+# model = "claude-sonnet-4-5"
 
 [slack]
-# Enabling Slack rewrites [channels_config.slack] in config.toml. Tokens are
-# rendered into config.toml because upstream has no env-read path for them.
+# `agents create --slack` flips enabled to true and fills tokens. Set bot_token
+# + app_token below or pass --slack-bot-token / --slack-app-token on the CLI.
+# Scoping fields (mention_only, thread_replies, etc.) inherit from defaults.
 enabled = false
-bot_token = ""              # xoxb-... SECRET
-app_token = ""              # xapp-... SECRET
-signing_secret = ""         # optional
-channel_id = ""             # optional - scope to one channel; empty = all
-allowed_users = ["*"]       # operator IDs, or ["*"] for open
-mention_only = true         # respond only when @-mentioned (DMs always pass)
-thread_replies = true       # reply in-thread vs new top-level message
-use_markdown_blocks = true  # GitHub-flavored markdown rendering
-stream_drafts = false       # progressive chat.update edits (token-burn)
 
 [composio]
-# Enable + set EITHER (mcp_url + mcp_api_key) for the MCP transport path,
-# OR (api_key) for the native ComposioTool path. The live agent uses MCP.
+# `agents create --composio` flips enabled to true. Inherits mcp_url,
+# mcp_transport, mcp_auth_header from defaults — usually all you need is
+# mcp_api_key (your per-entity x-consumer-api-key, blank to share Chaos's).
 enabled = false
-api_key = ""                # SECRET - native path
-allowed_tools = []
-mcp_url = ""                # e.g. "https://connect.composio.dev/mcp"
-mcp_api_key = ""            # SECRET - x-consumer-api-key value
-mcp_transport = "http"
-mcp_auth_header = "x-consumer-api-key"
 
 [autonomy]
-# level: "supervised" (operator approval on flagged tools) or "full" (no prompts)
-level = "supervised"
-# Tools the agent may run unattended in supervised mode. Composio MCP tools use
-# the prefix "composio__" (e.g. composio__COMPOSIO_SEARCH_TOOLS).
-auto_approve = [
-    "file_read",
-    "memory_recall",
-    "memory_store",
-    "calculator",
-    "glob_search",
-    "content_search",
-    "tool_search",
-]
+# Inherits level + auto_approve list from _defaults.toml. Override
+# auto_approve here only when this agent needs a custom tool surface.
 
 [exec]
 enabled = false
 
 [policy]
-require_approval_for = []   # surfaces in workspace/AGENTS.md managed policy block
+# Surfaces in workspace/AGENTS.md managed policy block via cmd_deploy.
+require_approval_for = []
 denied_domains = []
