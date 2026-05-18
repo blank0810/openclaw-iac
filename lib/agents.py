@@ -16,7 +16,14 @@ except ImportError:  # pragma: no cover - Python 3.10 compatibility
 from jinja2 import Environment, FileSystemLoader
 
 from lib.audit import append_audit_line, default_actor
-from lib.config import AgentDefinition, DeploymentConfig, SLUG_PATTERN, load_config
+from lib.config import (
+    AgentDefinition,
+    DeploymentConfig,
+    SLUG_PATTERN,
+    _load_defaults,
+    _parse_agent_toml,
+    load_config,
+)
 from lib.config_patch import default_exec_deny_patterns
 from lib.managed_policy import build_policy_block, inject_policy_block
 from lib.agent_env import build_agent_env
@@ -110,6 +117,46 @@ def _redact(token: str, head: int = 8, tail: int = 6) -> str:
     if len(token) <= head + tail:
         return "***"
     return f"{token[:head]}...***{token[-tail:]}"
+
+
+_WORKSPACE_TEMPLATES = (
+    "AGENTS.md.j2",
+    "BOOTSTRAP.md.j2",
+    "HEARTBEAT.md.j2",
+    "IDENTITY.md.j2",
+    "SOUL.md.j2",
+    "TOOLS.md.j2",
+    "USER.md.j2",
+)
+
+
+def _render_workspace_templates(project_root: Path, dest: Path) -> None:
+    """Render templates/workspace/*.j2 into dest/workspace using the freshly
+    written agent.toml + _defaults.toml. Graceful: silently skips if the
+    agent.toml can't parse the full schema (legacy minimal fixtures) or if
+    no Jinja templates are found."""
+    try:
+        defaults = _load_defaults(project_root)
+        agent_def = _parse_agent_toml(dest / "agent.toml", defaults)
+    except Exception:
+        return
+
+    workspace_dir = dest / "workspace"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+
+    jenv = _template_env(project_root)
+    rendered_any = False
+    for name in _WORKSPACE_TEMPLATES:
+        try:
+            template = jenv.get_template(f"workspace/{name}")
+        except Exception:
+            continue
+        out_name = name[: -len(".j2")]
+        (workspace_dir / out_name).write_text(template.render(agent=agent_def))
+        rendered_any = True
+
+    if rendered_any:
+        print(f"rendered: agents/{dest.name}/workspace/ (7 files from templates/workspace/)")
 
 
 def cmd_create(
@@ -208,6 +255,8 @@ def cmd_create(
         os.chmod(agent_toml, 0o600)
     except OSError:
         pass
+
+    _render_workspace_templates(project_root, dest)
 
     print(f"created: agents/{name}/agent.toml (mode 0600)")
     print(f"  display_name        {display_name}")
