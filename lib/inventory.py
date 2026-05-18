@@ -37,13 +37,19 @@ def build_inventory_data(
     }
 
 
-def _server_inventory() -> tuple[list[tuple[str, dict[str, Any]]]]:
+def _server_inventory() -> list[tuple[str, dict[str, Any]]]:
     data = build_inventory_data()
     cfg = data.pop("config")
-    return ([(cfg.server_host, data)],)
+    return [(cfg.server_host, data)]
 
 
-def __getattr__(name: str):
-    if name == "inventory":
-        return _server_inventory()
-    raise AttributeError(name)
+# Pyinfra discovers host groups by scanning module-level attributes via
+# dir() — lazy __getattr__ is invisible to that scan, which silently
+# yields a zero-host inventory and a no-op run. Expose the group eagerly.
+# Tests import build_inventory_data directly and don't depend on this;
+# the try/except keeps imports working in environments without a real
+# .env (e.g. CI without secrets).
+try:
+    zeroclaw_servers = _server_inventory()
+except Exception:
+    zeroclaw_servers = []
