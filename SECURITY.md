@@ -28,6 +28,8 @@ Secrets are split across two surfaces according to what upstream ZeroClaw actual
 
 The deploy host's `states/<slug>/config.toml` is owned by the deploy user and chmod-ed to `0600`. The compose mount is `:ro`, so even ZeroClaw's own `Config::save()` can't rewrite it after boot.
 
+Locally, secrets live in `agents/<slug>/agent.toml` and the optional `agents/_defaults.toml`. Both files must be chmod-ed to `0600`. The `agents/` directory is gitignored (only `agents/_template/` is exempted), so neither file lands in git history. Per-agent files override `_defaults.toml` via deep merge (see `lib/config.py::_deep_merge`); shared fields like the Anthropic key, Composio MCP URL, and the autonomy `auto_approve` list typically live in `_defaults.toml`, while per-Slack-app tokens stay per-agent.
+
 `tests/test_no_secrets_in_config.py` enforces this exact split: the LLM key must never appear in rendered `config.toml`, and Slack/Composio tokens must be present in `config.toml` (because that's the only place upstream reads them). `tests/test_agent_env.py` enforces the inverse for the env dict.
 
 ## 6. Memory And Privacy

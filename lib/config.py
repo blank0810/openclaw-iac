@@ -133,8 +133,30 @@ DEFAULT_AUTO_APPROVE: tuple[str, ...] = (
 )
 
 
-def _parse_agent_toml(path: Path) -> AgentDefinition:
-    raw = tomllib.loads(path.read_text())
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Merge `override` over `base`. Nested dicts recurse; everything else
+    (lists, strings, bools, ints) is replaced wholesale. Explicit empty
+    strings in override count as overrides, not absences."""
+    result = dict(base)
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def _load_defaults(project_root: Path) -> dict:
+    """Read agents/_defaults.toml if present. Empty dict if missing."""
+    defaults_path = project_root / "agents" / "_defaults.toml"
+    if not defaults_path.exists():
+        return {}
+    return tomllib.loads(defaults_path.read_text())
+
+
+def _parse_agent_toml(path: Path, defaults: dict | None = None) -> AgentDefinition:
+    agent_raw = tomllib.loads(path.read_text())
+    raw = _deep_merge(defaults or {}, agent_raw)
     identity = raw.get("identity", {})
     runtime = raw.get("runtime", {})
     llm = raw.get("llm", {})
@@ -203,6 +225,7 @@ def load_config(project_root: Path | None = None) -> DeploymentConfig:
     root_ssh_key_path = Path(str(env["ROOT_SSH_KEY_PATH"]))
     zeroclaw_image = str(env["ZEROCLAW_IMAGE"])
 
+    defaults = _load_defaults(project_root)
     agents_dir = project_root / "agents"
     agent_list: list[AgentDefinition] = []
     if agents_dir.is_dir():
@@ -212,7 +235,7 @@ def load_config(project_root: Path | None = None) -> DeploymentConfig:
             toml_path = child / "agent.toml"
             if not toml_path.exists():
                 continue
-            agent_list.append(_parse_agent_toml(toml_path))
+            agent_list.append(_parse_agent_toml(toml_path, defaults))
 
     _validate_uniqueness(agent_list)
 
