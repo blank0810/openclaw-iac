@@ -24,6 +24,7 @@ class JobStore:
 
     def finish_step(self, job_id: str, name: str, *, ok: bool, error: str | None = None) -> None:
         job = self._jobs[job_id]
+        assert job.steps[-1].name == name, f"finish_step({name!r}) but last step is {job.steps[-1].name!r}"
         step = job.steps[-1]
         step.status = "succeeded" if ok else "failed"
         step.error = error
