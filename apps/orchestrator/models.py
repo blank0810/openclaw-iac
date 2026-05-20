@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, field_validator
 
 from lib.config import SLUG_PATTERN
@@ -36,3 +38,30 @@ class CreateAgentRequest(BaseModel):
                 "(lowercase letters, digits, hyphen; start with letter/digit)"
             )
         return v
+
+
+JobStatus = Literal["queued", "running", "succeeded", "failed"]
+StepStatus = Literal["queued", "running", "succeeded", "failed"]
+
+
+class StepState(BaseModel):
+    name: str
+    status: StepStatus = "queued"
+    error: str | None = None
+
+
+class AgentResult(BaseModel):
+    name: str
+    container_name: str
+    server_ip: str
+    host: str
+    gateway_port: int
+    status: str
+
+
+class JobState(BaseModel):
+    job_id: str
+    status: JobStatus = "queued"
+    steps: list[StepState] = []
+    result: AgentResult | None = None
+    error: str | None = None

@@ -1,7 +1,12 @@
 import pytest
 from pydantic import ValidationError
 
-from apps.orchestrator.models import CreateAgentRequest
+from apps.orchestrator.models import (
+    AgentResult,
+    CreateAgentRequest,
+    JobState,
+    StepState,
+)
 
 
 def test_valid_request_minimal():
@@ -36,3 +41,25 @@ def test_rejects_underscore_slug():
 def test_slack_requires_both_tokens():
     with pytest.raises(ValidationError):
         CreateAgentRequest(name="acme", slack={"bot_token": "xoxb-x"})
+
+
+def test_agent_result_shape():
+    r = AgentResult(
+        name="acme", container_name="zeroclaw-acme",
+        server_ip="1.2.3.4", host="1.2.3.4",
+        gateway_port=42617, status="running",
+    )
+    assert r.container_name == "zeroclaw-acme"
+
+
+def test_job_state_defaults():
+    job = JobState(job_id="abc")
+    assert job.status == "queued"
+    assert job.steps == []
+    assert job.result is None
+    assert job.error is None
+
+
+def test_step_state():
+    s = StepState(name="create")
+    assert s.status == "queued"
