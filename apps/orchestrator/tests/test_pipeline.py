@@ -93,6 +93,21 @@ def test_run_pipeline_stops_on_failure(monkeypatch):
     assert len(final.steps) == 2
 
 
+def test_run_pipeline_unexpected_exception_marks_failed(monkeypatch):
+    def fake_run(cmd, **kw):
+        raise OSError("boom")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    store = JobStore()
+    job = store.create()
+    run_pipeline(store, job.job_id, CreateAgentRequest(name="acme"), server_ip="1.2.3.4")
+
+    final = store.get(job.job_id)
+    assert final.status == "failed"
+    assert "boom" in final.error
+    assert final.result is None
+
+
 def test_fetch_status_parses_running(monkeypatch):
     def fake_run(cmd, **kw):
         stdout = '{"Name": "zeroclaw-acme", "State": "running", "Status": "Up 2 minutes"}\n'

@@ -32,6 +32,14 @@ class JobStore:
             job.status = "failed"
             job.error = error
 
+    def fail(self, job_id: str, *, error: str) -> None:
+        job = self._jobs[job_id]
+        if job.steps and job.steps[-1].status == "running":
+            job.steps[-1].status = "failed"
+            job.steps[-1].error = error
+        job.status = "failed"
+        job.error = error
+
     def succeed(self, job_id: str, result: AgentResult) -> None:
         job = self._jobs[job_id]
         job.status = "succeeded"

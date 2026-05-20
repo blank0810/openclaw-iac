@@ -64,6 +64,28 @@ def test_succeed_sets_result():
     assert fetched.result is result
 
 
+def test_fail_sets_terminal_state():
+    store = JobStore()
+    job = store.create()
+    store.start_step(job.job_id, "create")
+    store.fail(job.job_id, error="boom")
+    fetched = store.get(job.job_id)
+    assert fetched.status == "failed"
+    assert fetched.error == "boom"
+    assert fetched.steps[-1].status == "failed"
+    assert fetched.steps[-1].error == "boom"
+
+
+def test_fail_with_no_steps_still_terminal():
+    store = JobStore()
+    job = store.create()
+    store.fail(job.job_id, error="boom")
+    fetched = store.get(job.job_id)
+    assert fetched.status == "failed"
+    assert fetched.error == "boom"
+    assert fetched.steps == []
+
+
 def test_multi_step_sequence():
     store = JobStore()
     job = store.create()

@@ -59,19 +59,26 @@ def _fetch_status(req: CreateAgentRequest) -> str:
 
 
 def run_pipeline(store: JobStore, job_id: str, req: CreateAgentRequest, *, server_ip: str) -> None:
-    for name, cmd in zip(_STEP_NAMES, build_commands(req)):
-        store.start_step(job_id, name)
-        proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
-        if proc.returncode != 0:
-            store.finish_step(job_id, name, ok=False, error=(proc.stderr or proc.stdout).strip())
-            return
-        store.finish_step(job_id, name, ok=True)
+    # Runs as a fire-and-forget background task: the 202 has already been sent,
+    # so any escaping exception would strand the job in "running" forever and the
+    # GET /jobs/{id} poller would never terminate. Trap everything into a terminal
+    # failed state so the async contract (every job ends succeeded OR failed) holds.
+    try:
+        for name, cmd in zip(_STEP_NAMES, build_commands(req)):
+            store.start_step(job_id, name)
+            proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+            if proc.returncode != 0:
+                store.finish_step(job_id, name, ok=False, error=(proc.stderr or proc.stdout).strip())
+                return
+            store.finish_step(job_id, name, ok=True)
 
-    store.succeed(job_id, AgentResult(
-        name=req.name,
-        container_name=f"zeroclaw-{req.name}",
-        server_ip=server_ip,
-        host=server_ip,
-        gateway_port=GATEWAY_PORT,
-        status=_fetch_status(req),
-    ))
+        store.succeed(job_id, AgentResult(
+            name=req.name,
+            container_name=f"zeroclaw-{req.name}",
+            server_ip=server_ip,
+            host=server_ip,
+            gateway_port=GATEWAY_PORT,
+            status=_fetch_status(req),
+        ))
+    except Exception as e:  # noqa: BLE001 - any unexpected error must land in job state
+        store.fail(job_id, error=f"unexpected pipeline error: {e}")
