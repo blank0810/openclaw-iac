@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 from apps.orchestrator.jobs import JobStore
 from apps.orchestrator.models import AgentResult, CreateAgentRequest
 
-CLI = "zeroclawctl.py"
+# apps/orchestrator/pipeline.py -> apps/orchestrator -> apps -> repo root
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+CLI = str(_REPO_ROOT / "zeroclawctl.py")
 GATEWAY_PORT = 42617
 _STEP_NAMES = ["create", "server_deploy", "agent_deploy"]
 
@@ -48,6 +51,8 @@ def _fetch_status(req: CreateAgentRequest) -> str:
             obj = json.loads(line)
             if obj.get("Name") == f"zeroclaw-{req.name}":
                 return obj.get("State") or obj.get("Status") or "unknown"
+    # Intentionally best-effort: status is a cosmetic field, so a failed/garbled
+    # probe must never fail the job. Do not "fix" this into raising.
     except Exception:
         pass
     return "started"

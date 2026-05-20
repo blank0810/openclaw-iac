@@ -1,9 +1,15 @@
+import os
 import subprocess
 import sys
 
 from apps.orchestrator.jobs import JobStore
 from apps.orchestrator.models import CreateAgentRequest
-from apps.orchestrator.pipeline import build_create_cmd, build_commands, run_pipeline
+from apps.orchestrator.pipeline import (
+    _fetch_status,
+    build_commands,
+    build_create_cmd,
+    run_pipeline,
+)
 
 
 def test_create_cmd_includes_flags():
@@ -13,7 +19,10 @@ def test_create_cmd_includes_flags():
         composio={"mcp_api_key": "ck_x"},
     )
     cmd = build_create_cmd(req)
-    assert cmd[:4] == [sys.executable, "zeroclawctl.py", "agents", "create"]
+    assert cmd[0] == sys.executable
+    assert cmd[1].endswith("zeroclawctl.py")
+    assert os.path.isabs(cmd[1])
+    assert cmd[2:4] == ["agents", "create"]
     assert "--name" in cmd and "acme" in cmd
     assert "--display-name" in cmd and "Acme" in cmd
     assert "--slack-bot-token" in cmd and "xoxb-x" in cmd
@@ -82,3 +91,28 @@ def test_run_pipeline_stops_on_failure(monkeypatch):
     assert final.steps[1].status == "failed"
     assert "exploded" in final.steps[1].error
     assert len(final.steps) == 2
+
+
+def test_fetch_status_parses_running(monkeypatch):
+    def fake_run(cmd, **kw):
+        stdout = '{"Name": "zeroclaw-acme", "State": "running", "Status": "Up 2 minutes"}\n'
+        return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert _fetch_status(CreateAgentRequest(name="acme")) == "running"
+
+
+def test_fetch_status_falls_back_on_garbage(monkeypatch):
+    def fake_run(cmd, **kw):
+        return subprocess.CompletedProcess(cmd, 0, stdout="not json\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert _fetch_status(CreateAgentRequest(name="acme")) == "started"
+
+
+def test_fetch_status_falls_back_on_exception(monkeypatch):
+    def fake_run(cmd, **kw):
+        raise OSError("boom")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert _fetch_status(CreateAgentRequest(name="acme")) == "started"
