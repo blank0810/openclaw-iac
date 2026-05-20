@@ -70,4 +70,9 @@ curl localhost:8000/jobs/a1b2c3...
 - **No delete/update endpoints, no rollback** on partial failure. A failed
   deploy leaves whatever the pipeline produced; re-POST or clean up via
   `zeroclawctl`.
+- **Token visibility:** Slack/Composio tokens are passed to the `agents create`
+  subprocess as argv, so they're briefly visible in `ps` / `/proc/<pid>/cmdline`
+  for the lifetime of that child process. Acceptable for a local single-operator
+  MVP; before exposing this to any non-operator client, pass secrets via env or
+  stdin to the CLI instead.
 - Every test mocks `subprocess` — the suite never contacts the live server.
