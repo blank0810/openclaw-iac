@@ -1,0 +1,16 @@
+[Unit]
+Description=ZeroClaw Orchestrator API
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/zeroclaw-orchestrator
+ExecStart=/opt/zeroclaw-orchestrator/.venv/bin/uvicorn apps.orchestrator.main:create_app --factory --host 127.0.0.1 --port 8000
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+
+[Install]
+WantedBy=multi-user.target
