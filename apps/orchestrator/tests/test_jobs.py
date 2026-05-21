@@ -97,3 +97,73 @@ def test_multi_step_sequence():
     assert len(fetched.steps) == 2
     assert [s.name for s in fetched.steps] == ["create", "server_deploy"]
     assert all(s.status == "succeeded" for s in fetched.steps)
+
+
+def test_create_stores_slug():
+    store = JobStore()
+    job = store.create(slug="acme")
+    assert job.slug == "acme"
+
+
+def test_create_slug_defaults_to_none():
+    store = JobStore()
+    job = store.create()
+    assert job.slug is None
+
+
+def test_claim_slug_first_wins():
+    store = JobStore()
+    job = store.create(slug="acme")
+    assert store.active_job_for("acme") is job
+
+
+def test_claim_slug_blocks_duplicate_while_active():
+    store = JobStore()
+    store.create(slug="acme")  # in-flight (queued)
+    assert store.active_job_for("acme") is not None
+
+
+def test_active_job_running_is_detectable():
+    store = JobStore()
+    job = store.create(slug="acme")
+    store.start_step(job.job_id, "render_config")  # now running
+    assert store.active_job_for("acme") is job
+
+
+def test_slug_freed_after_failure():
+    store = JobStore()
+    job = store.create(slug="acme")
+    store.start_step(job.job_id, "x")
+    store.finish_step(job.job_id, "x", ok=False, error="e")
+    assert store.active_job_for("acme") is None  # failed = no longer active
+
+
+def test_slug_freed_after_success():
+    store = JobStore()
+    job = store.create(slug="acme")
+    store.start_step(job.job_id, "x")
+    store.finish_step(job.job_id, "x", ok=True)
+    store.succeed(
+        job.job_id,
+        AgentResult(
+            name="acme",
+            container_name="zeroclaw-acme",
+            server_ip="1.2.3.4",
+            host="1.2.3.4",
+            gateway_port=42617,
+            status="running",
+        ),
+    )
+    assert store.active_job_for("acme") is None  # succeeded = no longer active
+
+
+def test_active_job_for_unknown_slug_is_none():
+    store = JobStore()
+    store.create(slug="acme")
+    assert store.active_job_for("globex") is None
+
+
+def test_active_job_for_does_not_match_none_slug():
+    store = JobStore()
+    store.create()  # slug is None
+    assert store.active_job_for(None) is None

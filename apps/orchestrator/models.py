@@ -61,6 +61,7 @@ class AgentResult(BaseModel):
 
 class JobState(BaseModel):
     job_id: str
+    slug: str | None = None
     status: JobStatus = "queued"
     steps: list[StepState] = []
     result: AgentResult | None = None

@@ -9,13 +9,26 @@ class JobStore:
     def __init__(self) -> None:
         self._jobs: dict[str, JobState] = {}
 
-    def create(self) -> JobState:
-        job = JobState(job_id=uuid.uuid4().hex)
+    def create(self, slug: str | None = None) -> JobState:
+        job = JobState(job_id=uuid.uuid4().hex, slug=slug)
         self._jobs[job.job_id] = job
         return job
 
     def get(self, job_id: str) -> JobState | None:
         return self._jobs.get(job_id)
+
+    def active_job_for(self, slug: str | None) -> JobState | None:
+        """Return the in-flight (queued/running) job claiming ``slug``, else None.
+
+        A None slug never claims anything, so unkeyed jobs (created without a
+        slug) cannot block a real create. Used by POST /agents to reject a
+        double-submit for the same agent while one is still provisioning."""
+        if slug is None:
+            return None
+        for job in self._jobs.values():
+            if job.slug == slug and job.status in ("queued", "running"):
+                return job
+        return None
 
     def start_step(self, job_id: str, name: str) -> None:
         job = self._jobs[job_id]
