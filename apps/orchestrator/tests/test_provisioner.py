@@ -1,7 +1,24 @@
+import pytest
+
 from apps.orchestrator.jobs import JobStore
 from apps.orchestrator.provisioner import GATEWAY_PORT, provision_agent
 from lib.config import load_config
 from tests.test_config import _write_agent, _write_env
+
+
+@pytest.fixture
+def chown_calls(monkeypatch):
+    """Record (path, uid, gid) instead of really chowning. Tests run as a
+    non-root user, so a real os.chown(..., 65534) would raise PermissionError;
+    the recorder lets the success-path tests run and lets us assert the chown
+    happened with the right UID/GID."""
+    calls = []
+
+    def _record(path, uid, gid):
+        calls.append((str(path), uid, gid))
+
+    monkeypatch.setattr("apps.orchestrator.provisioner.os.chown", _record)
+    return calls
 
 
 class _FakeContainer:
@@ -49,7 +66,7 @@ def _agent(tmp_path):
     return load_config(tmp_path).agents[0]
 
 
-def test_provision_success(tmp_path):
+def test_provision_success(tmp_path, chown_calls):
     agent = _agent(tmp_path)
     store = JobStore()
     job = store.create()
@@ -78,7 +95,34 @@ def test_provision_success(tmp_path):
     assert (tmp_path / "states" / "acme" / ".zeroclaw" / "config.toml").exists()
 
 
-def test_provision_tracks_all_steps(tmp_path):
+def test_provision_chowns_state_to_65534(tmp_path, chown_calls):
+    agent = _agent(tmp_path)
+    store = JobStore()
+    job = store.create()
+    state_dir = tmp_path / "states" / "acme"
+    provision_agent(
+        _FakeClient(),
+        store,
+        job.job_id,
+        agent,
+        image="img:1",
+        states_base=tmp_path / "states",
+        project_root=tmp_path,
+        server_ip="1.2.3.4",
+    )
+    assert store.get(job.job_id).status == "succeeded"
+    # config.toml is chowned to the container UID (mounted ro, must be readable)
+    config_toml = str(state_dir / ".zeroclaw" / "config.toml")
+    assert (config_toml, 65534, 65534) in chown_calls
+    # at least one workspace path is chowned (mounted rw, must be writable)
+    ws_prefix = str(state_dir / "workspace")
+    assert any(
+        path.startswith(ws_prefix) and (uid, gid) == (65534, 65534)
+        for path, uid, gid in chown_calls
+    )
+
+
+def test_provision_tracks_all_steps(tmp_path, chown_calls):
     agent = _agent(tmp_path)
     store = JobStore()
     job = store.create()
@@ -98,7 +142,7 @@ def test_provision_tracks_all_steps(tmp_path):
     assert all(s.status == "succeeded" for s in final.steps)
 
 
-def test_provision_unexpected_error_marks_failed(tmp_path):
+def test_provision_unexpected_error_marks_failed(tmp_path, chown_calls):
     agent = _agent(tmp_path)
     store = JobStore()
     job = store.create()
@@ -123,7 +167,7 @@ def test_provision_unexpected_error_marks_failed(tmp_path):
     assert "daemon down" in final.error
 
 
-def test_provision_skips_existing_network(tmp_path):
+def test_provision_skips_existing_network(tmp_path, chown_calls):
     agent = _agent(tmp_path)
     store = JobStore()
     job = store.create()

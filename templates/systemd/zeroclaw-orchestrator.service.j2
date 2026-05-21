@@ -7,10 +7,26 @@ Wants=docker.service
 Type=simple
 User=root
 WorkingDirectory=/opt/zeroclaw-orchestrator
+# load_config() reads SERVER_HOST etc. from .env on every POST. The operator
+# must scp a real .env here (gitignored, never synced); the leading "-" makes
+# it optional so the unit still starts if it's missing (POSTs will then 500).
+EnvironmentFile=-/opt/zeroclaw-orchestrator/.env
 ExecStart=/opt/zeroclaw-orchestrator/.venv/bin/uvicorn apps.orchestrator.main:create_app --factory --host 127.0.0.1 --port 8000
 Restart=on-failure
+# Hardening. ProtectSystem=full (NOT strict): keeps /opt writable so the
+# orchestrator can render+chown agent state under /opt/zeroclaw/states without
+# ReadWritePaths gymnastics, while /usr, /boot, and /etc stay read-only.
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
 NoNewPrivileges=yes
 ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+# PrivateNetwork and RestrictAddressFamilies are intentionally omitted: the
+# service needs the Docker socket and binds loopback (127.0.0.1:8000), both of
+# which those directives would break.
 
 [Install]
 WantedBy=multi-user.target

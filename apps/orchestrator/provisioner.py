@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from docker.types import LogConfig, Ulimit
@@ -11,6 +12,24 @@ from lib.config import AgentDefinition
 
 GATEWAY_PORT = 42617
 _CONTAINER_DATA = "/zeroclaw-data"
+
+
+def _chown_for_container(state_dir: Path, uid: int = 65534, gid: int = 65534) -> None:
+    """chown the per-agent state so the UID-65534 container can read config and
+    write workspace. Requires root (orchestrator is a root systemd unit).
+
+    config.toml is mounted ro (the container only reads it); workspace is
+    mounted rw (the container writes brain.db + sessions there), so every file
+    and dir under it must be owned by 65534 or the container crash-loops on
+    EACCES. Agents are created dynamically, so this CANNOT be done at deploy
+    time -- it must happen here, at provision time, as root."""
+    zc = state_dir / ".zeroclaw"
+    os.chown(zc, uid, gid)
+    os.chown(zc / "config.toml", uid, gid)
+    for root, _dirs, files in os.walk(state_dir / "workspace"):
+        os.chown(root, uid, gid)
+        for name in files:
+            os.chown(os.path.join(root, name), uid, gid)
 
 
 def build_container_spec(
@@ -89,6 +108,10 @@ def provision_agent(
 
         store.start_step(job_id, "render_config")
         env = render_agent_config(agent, state_dir, project_root=project_root)
+        # chown the rendered state to the container UID (65534) so the ro config
+        # mount is readable and the rw workspace mount is writable. Inside the
+        # try so a chown failure (e.g. not running as root) fails the job.
+        _chown_for_container(state_dir)
         store.finish_step(job_id, "render_config", ok=True)
 
         store.start_step(job_id, "ensure_network")

@@ -43,7 +43,9 @@ def render_agent_config(
     (zc / "config.toml").write_text(config_text)
     # config.toml carries the Composio MCP key + Slack tokens; tighten the mode
     # at creation time so the secret-bearing file is never world-readable, not
-    # even briefly. (Ownership chown to 65534 is the systemd-root deploy's job.)
+    # even briefly. Ownership is set separately at provision time by
+    # provisioner._chown_for_container (chown to 65534, the container UID) --
+    # agents are created dynamically, so it can't be a static deploy step.
     os.chmod(zc / "config.toml", 0o640)
 
     for name in _WORKSPACE_TEMPLATES:

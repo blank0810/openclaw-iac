@@ -23,13 +23,10 @@ Verify (no live host needed):
 
 from __future__ import annotations
 
-from pyinfra import host
 from pyinfra.operations import files, server, systemd
 
 ORCH_DIR = "/opt/zeroclaw-orchestrator"
 VENV = f"{ORCH_DIR}/.venv"
-
-deploy_user = host.data.get("deploy_user")
 
 
 files.directory(
@@ -41,6 +38,22 @@ files.directory(
     mode="755",
     _sudo=True,
 )
+
+# The orchestrator renders each new agent's state to
+# /opt/zeroclaw/states/<slug> at provision time (then chowns it to 65534).
+# Pre-create the base dirs as root so the runtime never has to mkdir across the
+# deploy/runtime boundary, and so the systemd unit's ProtectSystem=full leaves
+# /opt writable for them.
+for path in ("/opt/zeroclaw", "/opt/zeroclaw/states"):
+    files.directory(
+        name=f"Ensure {path}",
+        path=path,
+        present=True,
+        user="root",
+        group="root",
+        mode="755",
+        _sudo=True,
+    )
 
 # Copy only the source the orchestrator needs. Each dir is synced individually;
 # __pycache__ is excluded so stale local bytecode never lands on the host.

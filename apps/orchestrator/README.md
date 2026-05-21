@@ -47,6 +47,19 @@ Dry-run with `--dry` first to preview the plan.
 > # then on the host: chown root:root + chmod 600
 > ```
 
+> **Operator prerequisite — `.env`.** `load_config()` runs on every `POST` and
+> hard-reads `SERVER_HOST` (and friends) from `.env` relative to the service's
+> `WorkingDirectory` (`/opt/zeroclaw-orchestrator`). It carries secrets, is
+> gitignored, and is **never synced by the deploy**. The systemd unit loads it
+> via `EnvironmentFile=-/opt/zeroclaw-orchestrator/.env` (the `-` makes it
+> optional, so the unit still starts without it — but every `POST` then 500s).
+> Place a real `.env` on the host before the first create:
+>
+> ```bash
+> scp .env overlord101@<host>:/opt/zeroclaw-orchestrator/.env
+> # then on the host: chown root:root + chmod 600
+> ```
+
 ## Endpoints
 
 | Method | Path | Purpose |
