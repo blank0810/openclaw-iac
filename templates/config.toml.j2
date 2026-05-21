@@ -1,6 +1,7 @@
 # Managed by zeroclawctl - rendered from agents/{{ agent.name }}/agent.toml.
-# File mode is 0600 on the remote host because Composio MCP key + Slack
-# tokens are rendered into this file directly. Upstream ZeroClaw does not
+# File mode is 0640 on the remote host (chowned to the container user 65534)
+# because Composio MCP key + Slack tokens are rendered into this file
+# directly. Upstream ZeroClaw does not
 # read those from environment variables (see schema.rs apply_env_overrides
 # and SECURITY.md §5). The Anthropic / LLM API key still flows via env
 # (ZEROCLAW_API_KEY) - it's the only secret upstream picks up from env.

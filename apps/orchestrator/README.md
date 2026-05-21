@@ -124,8 +124,13 @@ Provision steps: `render_config` → `ensure_network` → `pull_image` →
   injected through `app.state.docker_client_factory` so tests pass a fake.
 - **LLM defaults:** `provider`/`model` in the request body override per-agent;
   everything unset inherits from `agents/_defaults.toml` via `lib.config`'s deep
-  merge. Secrets (api keys, tokens) live only in env passed to docker-py, never
-  in the rendered `config.toml`.
+  merge.
+- **Where secrets land (important):** only the LLM provider key is env-only —
+  it flows to docker-py as `ZEROCLAW_API_KEY` and never appears in
+  `config.toml`. **Slack tokens and the Composio MCP key ARE rendered into
+  `config.toml`** because upstream ZeroClaw has no env-read path for them. That
+  is exactly why the rendered `config.toml` is `chmod 0640` + chowned to
+  `65534:65534` (so only the container user can read it). See `SECURITY.md §5`.
 - **No delete/update endpoints, no rollback** on partial failure. A failed
   provision leaves whatever state was rendered/created; clean up via
   `zeroclawctl` or `docker`.
