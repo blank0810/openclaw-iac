@@ -7,7 +7,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 
 from apps.orchestrator.jobs import JobStore
 from apps.orchestrator.models import CreateAgentRequest, JobState
-from apps.orchestrator.provisioner import GATEWAY_PORT, provision_agent
+from apps.orchestrator.provisioner import provision_agent
 from lib.config import AgentDefinition, load_config
 
 # apps/orchestrator/main.py -> apps/orchestrator -> apps -> repo root
@@ -22,6 +22,19 @@ def verify_request() -> None:
 
 def _server_ip() -> str:
     return load_config().server_host
+
+
+def _container_exists(client, slug: str) -> bool:
+    """True if a ``zeroclaw-<slug>`` container already exists on the daemon.
+
+    Only ``NotFound`` is treated as absence; any other docker error (daemon
+    down, permission) propagates so the request fails loudly rather than
+    silently provisioning over a half-broken state."""
+    try:
+        client.containers.get(f"zeroclaw-{slug}")
+        return True
+    except docker.errors.NotFound:
+        return False
 
 
 def _toml_str(value: str) -> str:
@@ -110,13 +123,21 @@ def create_app(store: JobStore | None = None) -> FastAPI:
     @app.post("/agents", status_code=202, dependencies=[Depends(verify_request)])
     def create_agent(req: CreateAgentRequest, bg: BackgroundTasks) -> dict:
         store: JobStore = app.state.store
+        # Guard order matters: cheap in-memory check, then resolve the docker
+        # client (fails loudly if the daemon is down), then the container check
+        # — all BEFORE build_agent_definition writes any agent.toml, so a 409
+        # or a daemon-down 500 never leaves a stray file on disk.
         if store.active_job_for(req.name) is not None:
             raise HTTPException(
                 status_code=409, detail=f"create already in flight for {req.name}"
             )
+        client = app.state.docker_client_factory()
+        if _container_exists(client, req.name):
+            raise HTTPException(
+                status_code=409, detail=f"agent {req.name} already exists"
+            )
         agent = build_agent_definition(req, project_root=app.state.project_root)
         image = agent.image or load_config(app.state.project_root).zeroclaw_image
-        client = app.state.docker_client_factory()
         job = store.create(slug=req.name)
         bg.add_task(
             provision_agent,

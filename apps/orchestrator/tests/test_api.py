@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import docker
 import pytest
 from fastapi.testclient import TestClient
 
@@ -23,11 +24,30 @@ def _write_defaults(tmp_path: Path) -> None:
     )
 
 
+class _FakeContainers:
+    """Models client.containers.get: NotFound by default; flip exists=True to
+    simulate a container already on the daemon."""
+
+    def __init__(self, exists: bool = False):
+        self.exists = exists
+        self.got: list[str] = []
+
+    def get(self, name):
+        self.got.append(name)
+        if self.exists:
+            return object()  # stand-in container
+        raise docker.errors.NotFound(f"no such container: {name}")
+
+
 class _FakeClient:
-    """Stand-in for a docker.DockerClient — never touched when provision is stubbed."""
+    """Stand-in for a docker.DockerClient — provision is stubbed, so only
+    containers.get (the existence guard) is exercised."""
+
+    def __init__(self, container_exists: bool = False):
+        self.containers = _FakeContainers(exists=container_exists)
 
 
-def _wire_app(tmp_path, monkeypatch):
+def _wire_app(tmp_path, monkeypatch, *, container_exists=False):
     """Build an app pointed entirely at tmp_path with a fake docker client and a
     stubbed provisioner that drives the job to succeeded synchronously."""
     _write_env(tmp_path)
@@ -49,7 +69,9 @@ def _wire_app(tmp_path, monkeypatch):
     app = create_app()
     app.state.project_root = tmp_path
     app.state.states_base = tmp_path / "states"
-    app.state.docker_client_factory = lambda: _FakeClient()
+    app.state.docker_client_factory = lambda: _FakeClient(
+        container_exists=container_exists
+    )
     return app
 
 
@@ -87,6 +109,35 @@ def test_post_duplicate_slug_returns_409(tmp_path, monkeypatch):
     resp = client.post("/agents", json={"name": "acme"})
     assert resp.status_code == 409
     assert "acme" in resp.json()["detail"]
+
+
+def test_post_existing_container_returns_409(tmp_path, monkeypatch):
+    app = _wire_app(tmp_path, monkeypatch, container_exists=True)
+    client = TestClient(app)
+
+    resp = client.post("/agents", json={"name": "acme"})
+    assert resp.status_code == 409
+    assert "already exists" in resp.json()["detail"]
+    # guard fires before any disk write or job creation
+    assert not (tmp_path / "agents" / "acme" / "agent.toml").exists()
+    assert len(app.state.store._jobs) == 0
+
+
+def test_post_bad_token_returns_422_and_writes_nothing(tmp_path, monkeypatch):
+    app = _wire_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/agents",
+        json={
+            "name": "acme",
+            "slack": {"bot_token": "xoxb-\x1bevil", "app_token": "xapp-1"},
+        },
+    )
+    assert resp.status_code == 422
+    # Pydantic rejects before create_agent runs — no agent.toml on disk.
+    assert not (tmp_path / "agents" / "acme" / "agent.toml").exists()
+    assert len(app.state.store._jobs) == 0
 
 
 def test_post_agents_bad_slug_422():

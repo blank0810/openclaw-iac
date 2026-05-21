@@ -7,14 +7,34 @@ from pydantic import BaseModel, field_validator
 from lib.config import SLUG_PATTERN
 
 
+def _no_control_chars(v: str | None) -> str | None:
+    """Reject any control character (\\x00-\\x1f, \\x7f). These survive
+    _toml_str() unescaped and would corrupt the agent.toml — and because
+    load_config scans every agents/* dir, one malformed file breaks ALL
+    subsequent creates. Caught here so no disk write ever happens (clean 422)."""
+    if v is not None and any(ord(c) < 0x20 or ord(c) == 0x7F for c in v):
+        raise ValueError("control characters are not allowed")
+    return v
+
+
 class SlackSpec(BaseModel):
     bot_token: str
     app_token: str
     channel_id: str | None = None
 
+    @field_validator("bot_token", "app_token", "channel_id")
+    @classmethod
+    def _reject_control_chars(cls, v: str | None) -> str | None:
+        return _no_control_chars(v)
+
 
 class ComposioSpec(BaseModel):
     mcp_api_key: str | None = None
+
+    @field_validator("mcp_api_key")
+    @classmethod
+    def _reject_control_chars(cls, v: str | None) -> str | None:
+        return _no_control_chars(v)
 
 
 class LlmSpec(BaseModel):
