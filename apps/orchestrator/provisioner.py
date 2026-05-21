@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from docker.types import LogConfig, Ulimit
@@ -59,7 +58,14 @@ def build_container_spec(
 
 
 def _ensure_network(client, name: str) -> None:
-    """Create the per-agent bridge network unless it already exists."""
+    """Create the per-agent ``zc-<slug>`` bridge network unless it exists.
+
+    The per-agent bridge provides tenant-to-tenant L2 isolation: agents on
+    distinct ``zc-<slug>`` networks cannot see each other's traffic. It does
+    NOT confine egress -- this is a normal bridge (not ``internal=True``), so
+    the container still reaches the host route and LiteLLM at 10.0.0.4:4000,
+    which is intentional. Do not assume these networks sandbox outbound access.
+    """
     if not client.networks.list(names=[name]):
         client.networks.create(name, driver="bridge")
 
@@ -83,9 +89,6 @@ def provision_agent(
 
         store.start_step(job_id, "render_config")
         env = render_agent_config(agent, state_dir, project_root=project_root)
-        # config.toml carries Composio MCP key + Slack tokens; tighten mode so
-        # it is not world-readable (ownership chown to 65534 is the deploy's job).
-        os.chmod(state_dir / ".zeroclaw" / "config.toml", 0o640)
         store.finish_step(job_id, "render_config", ok=True)
 
         store.start_step(job_id, "ensure_network")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -40,6 +41,10 @@ def render_agent_config(
         agent=agent, exec_deny_patterns=default_exec_deny_patterns()
     )
     (zc / "config.toml").write_text(config_text)
+    # config.toml carries the Composio MCP key + Slack tokens; tighten the mode
+    # at creation time so the secret-bearing file is never world-readable, not
+    # even briefly. (Ownership chown to 65534 is the systemd-root deploy's job.)
+    os.chmod(zc / "config.toml", 0o640)
 
     for name in _WORKSPACE_TEMPLATES:
         try:

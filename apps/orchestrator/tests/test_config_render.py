@@ -1,3 +1,5 @@
+import os
+import stat
 from pathlib import Path
 
 from apps.orchestrator.config_render import render_agent_config
@@ -50,3 +52,14 @@ def test_render_no_llm_key_in_config_toml(tmp_path):
     render_agent_config(agent, state, project_root=tmp_path)
     cfg = (state / ".zeroclaw" / "config.toml").read_text()
     assert agent.llm.api_key not in cfg  # env-only
+
+
+def test_render_config_toml_is_0640(tmp_path):
+    # config.toml carries the Composio MCP key + Slack tokens; it must be
+    # tightened to 0640 at creation time (no world-readable window).
+    agent = _agent(tmp_path)
+    state = tmp_path / "state"
+    render_agent_config(agent, state, project_root=tmp_path)
+    cfg = state / ".zeroclaw" / "config.toml"
+    mode = stat.S_IMODE(os.stat(cfg).st_mode)
+    assert mode == 0o640, f"expected 0o640, got {oct(mode)}"

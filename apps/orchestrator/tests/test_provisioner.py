@@ -1,5 +1,3 @@
-import stat
-
 from apps.orchestrator.jobs import JobStore
 from apps.orchestrator.provisioner import GATEWAY_PORT, provision_agent
 from lib.config import load_config
@@ -98,25 +96,6 @@ def test_provision_tracks_all_steps(tmp_path):
     step_names = [s.name for s in final.steps]
     assert step_names == ["render_config", "ensure_network", "pull_image", "run_container"]
     assert all(s.status == "succeeded" for s in final.steps)
-
-
-def test_provision_chmods_config_toml_0640(tmp_path):
-    agent = _agent(tmp_path)
-    store = JobStore()
-    job = store.create()
-    provision_agent(
-        _FakeClient(),
-        store,
-        job.job_id,
-        agent,
-        image="img:1",
-        states_base=tmp_path / "states",
-        project_root=tmp_path,
-        server_ip="1.2.3.4",
-    )
-    cfg = tmp_path / "states" / "acme" / ".zeroclaw" / "config.toml"
-    mode = stat.S_IMODE(cfg.stat().st_mode)
-    assert mode == 0o640, f"expected 0o640, got {oct(mode)}"
 
 
 def test_provision_unexpected_error_marks_failed(tmp_path):
