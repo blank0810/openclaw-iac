@@ -1,0 +1,7 @@
+# Agent secrets - never commit
+*/.env
+*/.env.bak-*
+
+# Allow non-secret agent config
+!*/agent.toml
+!_template/

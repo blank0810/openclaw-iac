@@ -1,0 +1,21 @@
+[Unit]
+Description=Slack liveness probe for {{ agent_name }}
+After=docker.service
+Wants=docker.service
+ConditionPathExists=/opt/{{ agent_name }}/bin/slack-probe.sh
+
+[Service]
+Type=oneshot
+Environment="SLACK_APP_TOKEN={{ slack_app_token }}"
+Environment="CONTAINER_NAME={{ agent_name }}"
+ExecStart=/opt/{{ agent_name }}/bin/slack-probe.sh
+ProtectSystem=strict
+ReadWritePaths=/var/lib/{{ agent_name }}-probe /var/log/{{ agent_name }}-probe.log
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

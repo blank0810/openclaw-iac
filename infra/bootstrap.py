@@ -3,7 +3,8 @@
 #
 # After this script completes:
 #   - User overlord101 exists with SSH key access
-#   - Port 22 is firewalled; SSH only accepts connections on port 2222
+#   - SSH listens on ports 22 AND 2222 (set in group_data/all.py +
+#     infra/files/sshd_config; UFW opens both, fail2ban watches both)
 #   - Root login via SSH is permanently disabled
 #   - UFW and fail2ban are active
 #

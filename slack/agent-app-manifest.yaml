@@ -1,0 +1,72 @@
+# Slack app manifest for a Cloudesk tenant agent.
+#
+# Usage:
+#   1. Go to https://api.slack.com/apps
+#   2. Create New App -> From an app manifest
+#   3. Paste this YAML and change display_information.name plus bot_user.display_name
+#   4. Install the app to the tenant workspace
+#   5. Copy the Bot User OAuth Token (xoxb-...)
+#   6. Create an App-Level Token with connections:write and copy it (xapp-...)
+
+_metadata:
+  major_version: 2
+  minor_version: 1
+
+display_information:
+  name: Cloudesk Agent
+  description: Tenant AI assistant for Slack.
+  background_color: "#1D1C1D"
+
+features:
+  bot_user:
+    display_name: Cloudesk Agent
+    always_online: true
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  assistant_view:
+    assistant_description: AI assistant for this Slack workspace.
+    suggested_prompts:
+      - title: Ask for help
+        message: What can you help me with?
+      - title: Connect tools
+        message: Help me connect Gmail and Calendar.
+
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - assistant:write
+      - channels:history
+      - channels:read
+      - chat:write
+      - files:read
+      - files:write
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - im:write
+      - mpim:history
+      - mpim:read
+      - mpim:write
+      - reactions:read
+      - reactions:write
+      - users:read
+      - users:read.email
+
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+  incoming_webhooks:
+    incoming_webhooks_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
+  is_hosted: false
+  function_runtime: remote

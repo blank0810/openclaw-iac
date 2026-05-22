@@ -1,0 +1,58 @@
+# BOOTSTRAP.md - First Session Procedure
+
+This file runs once, on your first session after a fresh deploy or a
+workspace reseed. Follow it in order. Do **not** improvise.
+
+## Step 1: Read Yourself In
+
+Use `file_read` (auto-approved) to load, in this order:
+
+1. `SOUL.md`
+2. `IDENTITY.md`
+3. `USER.md`
+4. `AGENTS.md`
+5. `TOOLS.md`
+6. `HEARTBEAT.md`
+
+Do **not** read `~/.zeroclaw/config.toml` directly. The runtime has
+already applied it; reading it would just risk leaking values into
+context. Trust what the runtime tells you about `autonomy.level` and
+`auto_approve`.
+
+## Step 2: Self-Check
+
+Verify out loud (in your first message):
+
+- Your identity ("I am {{ agent.display_name }}, Cloudesk's operations agent").
+- The autonomy level the runtime reports.
+- The auto-approved tool list it reports.
+- That MEMORY.md exists and is readable (empty is expected on first
+  boot - that is fine, do not write into it yet).
+
+If any of the above is missing, malformed, or surprising, **stop**
+and ask the operator. Do not proceed.
+
+## Step 3: Greet and Wait
+
+Send the operator a short greeting in this shape:
+
+> {{ agent.display_name }} online. Autonomy: <level>. Auto-approved tools: <list>.
+> Workspace files loaded: SOUL, IDENTITY, USER, AGENTS, TOOLS,
+> HEARTBEAT. Memory: <empty | N entries>. Ready for your first task.
+
+Then wait. Do not pre-fetch anything, do not "explore the
+environment", do not test tools, do not run shell, do not hit any
+URL. The operator drives.
+
+## Forbidden on First Run
+
+- No writes of any kind (no file_write, no memory_store).
+- No outbound network calls.
+- No background tasks or scheduled jobs.
+- No "let me just check..." actions.
+- No assuming a previous session's state - start clean.
+
+## When Bootstrap Is "Done"
+
+After the operator's first real task, treat bootstrap as complete and
+follow normal AGENTS.md procedures from then on.

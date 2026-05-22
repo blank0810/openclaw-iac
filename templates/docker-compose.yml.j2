@@ -1,0 +1,49 @@
+services:
+{% for a in config.agents if a.enabled %}
+  {{ a.name }}:
+    image: {{ a.image or config.zeroclaw_image }}
+    container_name: zeroclaw-{{ a.name }}
+    restart: unless-stopped
+    env_file:
+      - ./states/{{ a.state_dir }}/zeroclaw.env
+    environment:
+      ZEROCLAW_WORKSPACE: /zeroclaw-data/workspace
+    volumes:
+      - ./states/{{ a.state_dir }}/.zeroclaw/config.toml:/zeroclaw-data/.zeroclaw/config.toml:ro
+      - ./states/{{ a.state_dir }}/workspace:/zeroclaw-data/workspace
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    user: "65534:65534"
+{% if a.host_port %}
+    ports:
+      - "127.0.0.1:{{ a.host_port }}:42617"
+{% endif %}
+    networks:
+      - zc-{{ a.name }}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+          pids: 256
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 2048
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+{% endfor %}
+
+networks:
+{% for a in config.agents if a.enabled %}
+  zc-{{ a.name }}:
+    driver: bridge
+{% endfor %}

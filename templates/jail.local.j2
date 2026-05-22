@@ -1,0 +1,14 @@
+# fail2ban jail overrides
+# Managed by zeroclawctl - do not edit manually.
+
+[sshd]
+enabled  = true
+port     = 22,{{ host.data.ssh_port }}
+filter   = sshd
+backend  = systemd
+bantime  = {{ host.data.get("fail2ban_bantime", "10m") }}
+findtime = {{ host.data.get("fail2ban_findtime", "10m") }}
+maxretry = {{ host.data.get("fail2ban_maxretry", 5) }}
+{% if host.data.get("fail2ban_ignoreip") %}
+ignoreip = {{ host.data.fail2ban_ignoreip }}
+{% endif %}

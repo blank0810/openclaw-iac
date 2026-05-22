@@ -24,3 +24,14 @@ pyinfra.zip
 # App-level artifacts
 apps/*/sessions.db
 credentials.json
+
+# zeroclawctl rewrite
+agents/
+!agents/_template/
+agents/*/.fetched/
+backups/
+.runtime-temp/
+
+# Reference artifacts / local noise (not source)
+nanobot-infra.zip
+.claude/scheduled_tasks.lock

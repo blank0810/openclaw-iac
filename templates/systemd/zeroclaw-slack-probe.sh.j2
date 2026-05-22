@@ -1,0 +1,73 @@
+#!/bin/bash
+set -euo pipefail
+
+STATE_DIR=${PROBE_STATE_DIR:-/var/lib/zeroclaw-probe/default}
+STATE_FILE="$STATE_DIR/consecutive_failures"
+LOG_FILE=${PROBE_LOG_FILE:-/var/log/zeroclaw-slack-probe.log}
+CONTAINER=${CONTAINER_NAME:-zeroclaw}
+MAX_FAILURES=3
+ZOMBIE_WINDOW=6h
+
+mkdir -p "$STATE_DIR"
+[ -f "$STATE_FILE" ] || echo 0 > "$STATE_FILE"
+touch "$LOG_FILE"
+
+log() {
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$LOG_FILE"
+}
+
+container_running() {
+  [ "$(docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' "$CONTAINER" 2>/dev/null)" = "true" ]
+}
+
+restart_container() {
+  if ! container_running; then
+    log "SKIP restart ($1): container is stopped"
+    echo 0 > "$STATE_FILE"
+    return
+  fi
+  log "RESTART triggered: $1"
+  docker restart "$CONTAINER" >> "$LOG_FILE" 2>&1 || log "RESTART FAILED"
+  echo 0 > "$STATE_FILE"
+}
+
+if [ -z "${SLACK_APP_TOKEN:-}" ]; then
+  log "FATAL: SLACK_APP_TOKEN not set in environment"
+  exit 1
+fi
+
+tmp_resp=$(mktemp)
+trap 'rm -f "$tmp_resp"' EXIT
+
+http_code=$(curl -sS -o "$tmp_resp" -w '%{http_code}' -m 8 \
+  -X POST \
+  -H "Authorization: Bearer $SLACK_APP_TOKEN" \
+  https://slack.com/api/apps.connections.open) || http_code="000"
+
+body=$(cat "$tmp_resp" 2>/dev/null || true)
+
+if [ "$http_code" = "200" ] && \
+   printf '%s' "$body" | jq -e '.ok == true and (.url | startswith("wss://"))' >/dev/null 2>&1; then
+  echo 0 > "$STATE_FILE"
+  rule1_ok=1
+else
+  fails=$(cat "$STATE_FILE")
+  fails=$((fails + 1))
+  echo "$fails" > "$STATE_FILE"
+  preview=$(printf '%s' "$body" | head -c 160 | tr -d '\n')
+  log "PROBE-FAIL ($fails/$MAX_FAILURES) http=$http_code body=$preview"
+  rule1_ok=0
+  if [ "$fails" -ge "$MAX_FAILURES" ]; then
+    restart_container "apps.connections.open failed $fails consecutive times"
+    exit 0
+  fi
+fi
+
+if [ "$rule1_ok" = "1" ] && container_running; then
+  matches=$(docker logs "$CONTAINER" --since "$ZOMBIE_WINDOW" 2>&1 \
+    | grep -cE 'websocket connected|received disconnect|reconnecting' || true)
+  if [ "$matches" -eq 0 ]; then
+    log "ZOMBIE detected: 0 socket events in $ZOMBIE_WINDOW"
+    restart_container "no Slack socket activity in $ZOMBIE_WINDOW window"
+  fi
+fi
