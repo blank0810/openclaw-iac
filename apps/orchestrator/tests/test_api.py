@@ -93,12 +93,12 @@ def test_post_agents_provisions_via_injected_client(tmp_path, monkeypatch):
     app = _wire_app(tmp_path, monkeypatch)
     client = TestClient(app)
 
-    resp = client.post("/agents", json={"name": "acme", "user_id": "u_test"})
+    resp = client.post("/v1/agent/create", json={"name": "acme", "user_id": "u_test"})
     assert resp.status_code == 202
     job_id = resp.json()["job_id"]
     assert job_id
 
-    poll = client.get(f"/jobs/{job_id}")
+    poll = client.get(f"/v1/agent/job/{job_id}")
     assert poll.status_code == 200
     body = poll.json()
     assert body["status"] == "succeeded"
@@ -113,7 +113,7 @@ def test_post_duplicate_slug_returns_409(tmp_path, monkeypatch):
     app.state.store.create(slug="acme")
     client = TestClient(app)
 
-    resp = client.post("/agents", json={"name": "acme", "user_id": "u_test"})
+    resp = client.post("/v1/agent/create", json={"name": "acme", "user_id": "u_test"})
     assert resp.status_code == 409
     assert "acme" in resp.json()["detail"]
 
@@ -122,7 +122,7 @@ def test_post_existing_container_returns_409(tmp_path, monkeypatch):
     app = _wire_app(tmp_path, monkeypatch, container_exists=True)
     client = TestClient(app)
 
-    resp = client.post("/agents", json={"name": "acme", "user_id": "u_test"})
+    resp = client.post("/v1/agent/create", json={"name": "acme", "user_id": "u_test"})
     assert resp.status_code == 409
     assert "already exists" in resp.json()["detail"]
     # guard fires before any disk write or job creation
@@ -135,7 +135,7 @@ def test_post_bad_token_returns_422_and_writes_nothing(tmp_path, monkeypatch):
     client = TestClient(app)
 
     resp = client.post(
-        "/agents",
+        "/v1/agent/create",
         json={
             "name": "acme",
             "slack": {"bot_token": "xoxb-\x1bevil", "app_token": "xapp-1"},
@@ -149,13 +149,13 @@ def test_post_bad_token_returns_422_and_writes_nothing(tmp_path, monkeypatch):
 
 def test_post_agents_bad_slug_422():
     client = TestClient(create_app())
-    resp = client.post("/agents", json={"name": "BadName"})
+    resp = client.post("/v1/agent/create", json={"name": "BadName"})
     assert resp.status_code == 422
 
 
 def test_get_unknown_job_404():
     client = TestClient(create_app())
-    assert client.get("/jobs/nope").status_code == 404
+    assert client.get("/v1/agent/job/nope").status_code == 404
 
 
 def test_build_agent_definition_serializes_request(tmp_path):

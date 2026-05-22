@@ -112,7 +112,7 @@ When the user mentions "council", "council of agents", or "agents", use these sp
 
 | Agent | Role | Model | When to Use |
 |-------|------|-------|-------------|
-| **infra-engineer** | Server 3 infrastructure specialist | Opus | Pyinfra tasks, Docker configs, shell scripts, server hardening — any implementation work in this project |
+| **zeroclaw-engineer** | Server 3 + ZeroClaw runtime specialist | Opus | Pyinfra tasks, `docker/zeroclaw/` compose hardening, gateway/agent config, prompt-injection defense — any infra or runtime-config work for the self-hosted ZeroClaw stack |
 
 ### Global Agents (`~/.claude/agents/`)
 
@@ -129,7 +129,7 @@ When the user mentions "council", "council of agents", or "agents", use these sp
 
 - **"Ask the council"** — pick the most relevant agent(s) for the task
 - **"Let the council review"** — use lead-engineer for architecture, qa-engineer for code
-- **"Council, implement this"** — use infra-engineer (project-scope) for infra work
+- **"Council, implement this"** — use zeroclaw-engineer (project-scope) for infra/runtime work
 - **Multiple agents** — run in parallel when tasks are independent
 
 ## Plans & History

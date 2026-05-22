@@ -1,0 +1,10 @@
+[Unit]
+Description=ZeroClaw agent-state backup (zips /opt/zeroclaw/states/* to /opt/zeroclaw/backups)
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+# Stdlib-only script; uses the host python3, no venv. Writes zips + logs to
+# /var/log/zeroclaw-backup.log. Triggered by zeroclaw-backup.timer.
+ExecStart=/usr/bin/python3 /opt/zeroclaw/zeroclaw-backup.py

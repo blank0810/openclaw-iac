@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import datetime
 import os
+import shutil
+import zipfile
 from pathlib import Path
 
+import docker
 from docker.types import LogConfig, Ulimit
 
 from apps.orchestrator.config_render import render_agent_config
 from apps.orchestrator.jobs import JobStore
 from apps.orchestrator.models import AgentResult
+from lib.agent_env import build_agent_env
 from lib.config import AgentDefinition
 
 GATEWAY_PORT = 42617
@@ -146,3 +151,153 @@ def provision_agent(
         )
     except Exception as e:  # noqa: BLE001 - any error must land in job state
         store.fail(job_id, error=f"provision error: {e}")
+
+
+def reprovision_agent(
+    client,
+    store: JobStore,
+    job_id: str,
+    agent: AgentDefinition,
+    *,
+    image: str,
+    states_base: Path,
+    project_root: Path,
+    server_ip: str,
+) -> None:
+    """Stop+remove the existing container (if any) then provision fresh — the
+    mechanism behind a live per-agent provider switch. Docker can't change a
+    running container's env (the LLM key flows via ZEROCLAW_API_KEY), so the
+    container is recreated. The per-agent state dir is a host bind-mount, so
+    workspace/brain.db/memory survive the swap; only the container blips."""
+    try:
+        existing = client.containers.get(f"zeroclaw-{agent.name}")
+        existing.stop(timeout=10)
+        existing.remove(v=True)
+    except docker.errors.NotFound:
+        pass
+    except Exception as e:  # noqa: BLE001
+        store.fail(job_id, error=f"reprovision pre-remove error: {e}")
+        return
+    provision_agent(
+        client,
+        store,
+        job_id,
+        agent,
+        image=image,
+        states_base=states_base,
+        project_root=project_root,
+        server_ip=server_ip,
+    )
+
+
+def _zip_dir_contents(src: Path, dest_zip: Path) -> None:
+    """Zip the contents of ``src`` (arcnames relative to it). Matches the host
+    backup script so a restore extracts straight into a state dir."""
+    dest_zip.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(dest_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _dirs, files in os.walk(src):
+            for name in files:
+                fp = Path(root) / name
+                zf.write(fp, fp.relative_to(src))
+
+
+def backup_agent(
+    name: str, *, states_base: Path, backups_base: Path, date: str | None = None
+) -> tuple[Path, int, str]:
+    """Zip an agent's state dir -> backups_base/<name>/<date>/<name>.zip and
+    return (location, size_bytes, date). Pure filesystem (no docker), so the
+    API can call it synchronously. Mirrors the host backup script's layout so a
+    restore for the same date resolves this exact file. Raises FileNotFoundError
+    if the agent has no state dir."""
+    date = date or datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    state_dir = states_base / name
+    if not state_dir.is_dir():
+        raise FileNotFoundError(state_dir)
+    dest = backups_base / name / date / f"{name}.zip"
+    _zip_dir_contents(state_dir, dest)
+    return dest, dest.stat().st_size, date
+
+
+def restore_agent(
+    client,
+    store: JobStore,
+    job_id: str,
+    agent: AgentDefinition,
+    *,
+    backup_zip: Path,
+    image: str,
+    states_base: Path,
+    backups_base: Path,
+    server_ip: str,
+) -> None:
+    """Restore an agent's state dir from a backup zip, then recreate its
+    container. The caller has already validated that ``backup_zip`` and the
+    agent definition exist. Snapshot-current-first makes a wrong restore
+    recoverable; the extract is atomic (temp dir then swap) so a partial unzip
+    never corrupts live state. The restored config.toml is kept as-is (no
+    re-render); the env/api_key come from the current agent definition."""
+    try:
+        ts = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        state_dir = states_base / agent.state_dir
+
+        store.start_step(job_id, "snapshot_current")
+        if state_dir.exists():
+            snap = backups_base / agent.name / f"_pre-restore-{ts}" / f"{agent.name}.zip"
+            _zip_dir_contents(state_dir, snap)
+        store.finish_step(job_id, "snapshot_current", ok=True)
+
+        store.start_step(job_id, "stop_remove")
+        try:
+            existing = client.containers.get(f"zeroclaw-{agent.name}")
+            existing.stop(timeout=10)
+            existing.remove(v=True)
+        except docker.errors.NotFound:
+            pass
+        store.finish_step(job_id, "stop_remove", ok=True)
+
+        store.start_step(job_id, "extract")
+        # Atomic: unzip into a temp dir, then swap it into the state dir, so a
+        # failed extract can never leave half-restored state behind.
+        tmp = states_base / f".restore-{agent.name}-{ts}"
+        if tmp.exists():
+            shutil.rmtree(tmp)
+        tmp.mkdir(parents=True)
+        with zipfile.ZipFile(backup_zip, "r") as zf:
+            zf.extractall(tmp)
+        if state_dir.exists():
+            shutil.rmtree(state_dir)
+        shutil.move(str(tmp), str(state_dir))
+        store.finish_step(job_id, "extract", ok=True)
+
+        store.start_step(job_id, "chown")
+        _chown_for_container(state_dir)
+        store.finish_step(job_id, "chown", ok=True)
+
+        store.start_step(job_id, "ensure_network")
+        _ensure_network(client, f"zc-{agent.name}")
+        store.finish_step(job_id, "ensure_network", ok=True)
+
+        store.start_step(job_id, "run_container")
+        spec = build_container_spec(
+            agent, env=build_agent_env(agent), state_dir=str(state_dir), image=image
+        )
+        container = client.containers.run(**spec)
+        store.finish_step(job_id, "run_container", ok=True)
+
+        store.succeed(
+            job_id,
+            AgentResult(
+                user_id=agent.user_id,
+                name=agent.name,
+                display_name=agent.display_name,
+                container_name=f"zeroclaw-{agent.name}",
+                container_id=container.id,
+                image=image,
+                server_ip=server_ip,
+                host=server_ip,
+                gateway_port=GATEWAY_PORT,
+                status=getattr(container, "status", "created"),
+            ),
+        )
+    except Exception as e:  # noqa: BLE001 - any error must land in job state
+        store.fail(job_id, error=f"restore error: {e}")

@@ -7,7 +7,7 @@
 
 [sshd]
 enabled  = true
-port     = 2222
+port     = 22,2222
 filter   = sshd
 backend  = systemd
 bantime  = 10m

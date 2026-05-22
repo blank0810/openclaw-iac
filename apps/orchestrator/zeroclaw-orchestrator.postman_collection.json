@@ -1,0 +1,163 @@
+{
+  "info": {
+    "name": "ZeroClaw Orchestrator",
+    "description": "Local-tunnel collection for the ZeroClaw Orchestrator API (v1). PREREQUISITE: open the SSH tunnel first so localhost:8000 reaches the host:\n\n  ssh -i ./hetzner-cloudesk.pem -p 2222 -f -N -L 127.0.0.1:8000:127.0.0.1:8000 overlord101@<SERVER_HOST>\n\nFlows:\n- Create: Create agent (auto-captures job_id) -> Poll job until succeeded/failed.\n- Delete: Delete agent (set the slug in the URL).\n- Providers: List providers (current default + registry); Set default provider (NEW agents); Set agent provider (live per-agent switch, recreates the container, auto-captures job_id -> Poll job).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000" },
+    { "key": "job_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+      }
+    },
+    {
+      "name": "Create agent",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 202) {",
+              "  const id = pm.response.json().job_id;",
+              "  pm.collectionVariables.set('job_id', id);",
+              "  console.log('captured job_id =', id);",
+              "} else {",
+              "  console.log('non-202:', pm.response.code, pm.response.text());",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"demo-bot\",\n  \"user_id\": \"u_REPLACE\",\n  \"display_name\": \"Demo\",\n  \"slack\": {\n    \"bot_token\": \"xoxb-REPLACE\",\n    \"app_token\": \"xapp-REPLACE\"\n  },\n  \"composio\": {\n    \"mcp_api_key\": \"ck_REPLACE\"\n  }\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/v1/agent/create", "host": ["{{baseUrl}}"], "path": ["v1", "agent", "create"] }
+      }
+    },
+    {
+      "name": "Poll job",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/agent/job/{{job_id}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "agent", "job", "{{job_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Delete agent",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/agent/delete/demo-bot",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "agent", "delete", "demo-bot"]
+        }
+      }
+    },
+    {
+      "name": "List providers",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/v1/providers", "host": ["{{baseUrl}}"], "path": ["v1", "providers"] }
+      }
+    },
+    {
+      "name": "Set default provider",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"profile\": \"gemini\"\n}" },
+        "url": { "raw": "{{baseUrl}}/v1/config/provider", "host": ["{{baseUrl}}"], "path": ["v1", "config", "provider"] }
+      }
+    },
+    {
+      "name": "Set agent provider (live, recreates container)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 202) {",
+              "  const id = pm.response.json().job_id;",
+              "  pm.collectionVariables.set('job_id', id);",
+              "  console.log('captured job_id =', id, '- now run Poll job');",
+              "} else {",
+              "  console.log('non-202:', pm.response.code, pm.response.text());",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"profile\": \"gemini\"\n}" },
+        "url": {
+          "raw": "{{baseUrl}}/v1/agent/demo-bot/provider",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "agent", "demo-bot", "provider"]
+        }
+      }
+    },
+    {
+      "name": "Restore agent (from backup date)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 202) {",
+              "  const id = pm.response.json().job_id;",
+              "  pm.collectionVariables.set('job_id', id);",
+              "  console.log('captured job_id =', id, '- now run Poll job');",
+              "} else {",
+              "  console.log('non-202:', pm.response.code, pm.response.text());",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"demo-bot\"\n}" },
+        "url": {
+          "raw": "{{baseUrl}}/v1/agent/restore/2026-05-22",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "agent", "restore", "2026-05-22"]
+        }
+      }
+    },
+    {
+      "name": "Backup agent (manual, returns location)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/agent/demo-bot/backup",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "agent", "demo-bot", "backup"]
+        }
+      }
+    }
+  ]
+}

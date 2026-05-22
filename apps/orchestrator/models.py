@@ -98,3 +98,40 @@ class JobState(BaseModel):
     steps: list[StepState] = []
     result: AgentResult | None = None
     error: str | None = None
+
+
+class DeleteResult(BaseModel):
+    removed: str                        # container name (f"zeroclaw-{slug}")
+    container_id: str | None = None
+    network_removed: str | None = None  # f"zc-{slug}" if it was removed
+    status: str = "deleted"
+
+
+class SetProviderRequest(BaseModel):
+    profile: str                        # a name from the server-side registry
+
+    @field_validator("profile")
+    @classmethod
+    def _valid_profile(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("profile must not be empty")
+        return _no_control_chars(v)
+
+
+class RestoreRequest(BaseModel):
+    name: str                           # agent slug; date is a path param
+
+    @field_validator("name")
+    @classmethod
+    def _valid_slug(cls, v: str) -> str:
+        if not SLUG_PATTERN.match(v):
+            raise ValueError(f"name must match {SLUG_PATTERN.pattern}")
+        return v
+
+
+class BackupResult(BaseModel):
+    name: str
+    date: str                           # YYYY-MM-DD
+    location: str                       # absolute path to the zip on the host
+    size_bytes: int
+    status: str = "ok"

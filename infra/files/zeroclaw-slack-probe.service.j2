@@ -1,0 +1,23 @@
+[Unit]
+Description=ZeroClaw Slack liveness probe
+After=docker.service
+Wants=docker.service
+ConditionPathExists=/opt/zeroclaw/bin/zeroclaw-slack-probe.sh
+
+[Service]
+Type=oneshot
+Environment="SLACK_APP_TOKEN={{ slack_app_token }}"
+ExecStart=/opt/zeroclaw/bin/zeroclaw-slack-probe.sh
+# Hardening — probe is a short-lived oneshot reading one config + calling
+# Slack + (rarely) calling `docker restart`. No need for write access
+# beyond its own state + log dir, no networking beyond outbound, no IPC.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/zeroclaw-probe /var/log/zeroclaw-probe.log
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

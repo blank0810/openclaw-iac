@@ -10,7 +10,10 @@ deploy_user = "overlord101"
 ssh_port = 2222
 
 # UFW TCP ports to allow.
-allowed_tcp_ports = [2222]
+# 22 was reopened 2026-04-29 at team-lead request (alongside 2222). Both ports
+# accept SSH; fail2ban watches both. Drop 22 again by removing it from this
+# list AND from infra/files/sshd_config + infra/files/fail2ban_jail.local.
+allowed_tcp_ports = [22, 2222]
 
 # Server timezone.
 timezone = "UTC"
@@ -23,13 +26,8 @@ team_ssh_keys = [
 ]
 
 # ----------------------------------------------------------------------------
-# Chaos (OpenClaw) stack
+# ZeroClaw stack
 # ----------------------------------------------------------------------------
-# Directory on Server 3 that holds docker-compose.yml, config/, state/,
-# workspace/, and the remote .env. Owned by overlord101, mode 0750.
-chaos_dir = "/opt/openclaw/chaos"
-
-# Default image pin — reference only. The real value comes from the
-# CHAOS_IMAGE env var (laptop .env -> remote .env -> compose substitution).
-# Kept here so `group_data` documents the project's intended pin.
-chaos_image = "ghcr.io/openclaw/openclaw:2026.4.14"
+# Directory on Server 3 that holds docker-compose.yml, config/, data/, and
+# the remote .env. Owned by overlord101, mode 0750.
+zeroclaw_dir = "/opt/zeroclaw"

@@ -1,7 +1,8 @@
 """
 hardening.py — SSH lockdown, UFW firewall, and fail2ban intrusion prevention.
 
-Run as root during bootstrap (infra/bootstrap.py). Idempotent: safe to re-run.
+Run as root during bootstrap (infra/bootstrap.py), or re-run via the deploy
+inventory when sshd/UFW/fail2ban config changes. Idempotent: safe to re-run.
 
 Operations (order matters — sshd restart MUST be last):
   1.  Upload hardened sshd_config
@@ -12,7 +13,14 @@ Operations (order matters — sshd restart MUST be last):
   6.  Install fail2ban
   7.  Upload fail2ban jail.local
   8.  Enable and restart fail2ban
-  9.  Restart sshd  ← LAST: root SSH dies after this
+  9.  systemctl daemon-reload  ← regenerate ssh.socket dropin from sshd_config
+  10. Restart ssh.socket + ssh.service  ← LAST: socket activation re-binds ports
+
+Why step 9 exists: Ubuntu 24.04+ uses socket-activated ssh. The listening
+ports come from /run/systemd/generator/ssh.socket.d/addresses.conf, which is
+generated from /etc/ssh/sshd_config at daemon-reload time. A plain
+`systemctl restart ssh.service` will NOT re-bind ports if Port directives
+change — only daemon-reload + ssh.socket restart picks up the new ports.
 """
 
 from pyinfra import host
@@ -110,10 +118,31 @@ systemd.service(
 )
 
 # ---------------------------------------------------------------------------
-# 9. Restart sshd — MUST be the last operation.
-#    After this completes, port 22 is closed and root login is disabled.
-#    All future access must use: ssh -p 2222 overlord101@<host>
+# 9. systemctl daemon-reload — regenerates /run/systemd/generator/ssh.socket.d/
+#    addresses.conf from the freshly-uploaded /etc/ssh/sshd_config. Without
+#    this, ssh.socket keeps the old Port set even after a service restart.
 # ---------------------------------------------------------------------------
+server.shell(
+    name="systemctl daemon-reload (re-generate ssh.socket dropin)",
+    commands=["systemctl daemon-reload"],
+)
+
+# ---------------------------------------------------------------------------
+# 10. Restart ssh.socket + ssh.service — MUST be the last operations.
+#     After this, root login is disabled and only `overlord101` may SSH in via
+#     key. As of 2026-04-29 sshd listens on BOTH 22 and 2222 (team lead
+#     request); previously 22 was closed. Connect via either port.
+#     ssh.socket re-binds the listening ports; ssh.service is restarted too so
+#     any in-flight handler picks up the new sshd_config immediately.
+# ---------------------------------------------------------------------------
+systemd.service(
+    name="Restart ssh.socket (re-bind listening ports per sshd_config)",
+    service="ssh.socket",
+    running=True,
+    restarted=True,
+    enabled=True,
+)
+
 systemd.service(
     name="Restart sshd (applies hardened config — root SSH disabled after this)",
     service="ssh",

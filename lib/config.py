@@ -11,7 +11,7 @@ except ImportError:  # pragma: no cover - Python 3.10 compatibility
 from dotenv import dotenv_values
 
 
-VALID_LLM_PROVIDERS = ("anthropic", "litellm")
+VALID_LLM_PROVIDERS = ("anthropic", "litellm", "gemini")
 SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
@@ -23,9 +23,21 @@ class LlmConfig:
     timeout_secs: int
 
     def __post_init__(self) -> None:
-        if self.provider not in VALID_LLM_PROVIDERS:
+        # ZeroClaw reaches OpenAI-/Anthropic-compatible proxies (e.g. the
+        # LiteLLM gateway on Server 2) via a "custom:<base_url>" /
+        # "anthropic-custom:<base_url>" provider string; the base URL is encoded
+        # in the provider itself (see upstream custom-providers.md). Accept those
+        # alongside the named providers.
+        if self.provider.startswith(("custom:", "anthropic-custom:")):
+            if not self.provider.split(":", 1)[1]:
+                raise ValueError(
+                    "custom provider needs a base URL, e.g. 'custom:https://host/v1'"
+                )
+        elif self.provider not in VALID_LLM_PROVIDERS:
             raise ValueError(
-                f"llm.provider must be one of {VALID_LLM_PROVIDERS}, got {self.provider!r}"
+                f"llm.provider must be one of {VALID_LLM_PROVIDERS} or a "
+                f"'custom:<base_url>'/'anthropic-custom:<base_url>' endpoint, "
+                f"got {self.provider!r}"
             )
 
 

@@ -62,4 +62,12 @@ def render_agent_config(
         )
         agents_md.write_text(inject_policy_block(agents_md.read_text(), policy))
 
+    # BOOTSTRAP.md Step 2 verifies MEMORY.md exists and is readable; it is not
+    # one of the rendered templates (the memory log starts empty and ZeroClaw's
+    # memory_store tool owns it thereafter). Create it empty if absent so the
+    # first-session bootstrap does not pause. Empty is expected on first boot.
+    memory_md = ws / "MEMORY.md"
+    if not memory_md.exists():
+        memory_md.write_text("")
+
     return build_agent_env(agent)

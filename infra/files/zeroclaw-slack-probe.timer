@@ -1,0 +1,18 @@
+[Unit]
+Description=Run ZeroClaw Slack liveness probe every 3 minutes
+# Don't start probing until docker is up.
+After=docker.service
+Requires=docker.service
+
+[Timer]
+# Wait 2 min after boot before the first probe (lets the container settle).
+OnBootSec=2min
+# Then every 3 minutes thereafter.
+OnUnitActiveSec=3min
+# Spread probe times to avoid hammering Slack on the exact :00 / :03 marks.
+RandomizedDelaySec=15s
+Unit=zeroclaw-slack-probe.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target

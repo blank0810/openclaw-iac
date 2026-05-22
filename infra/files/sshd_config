@@ -3,6 +3,9 @@
 # Uploaded by infra/tasks/hardening.py
 
 # --- Network ---
+# 22 reopened 2026-04-29 at team-lead request; 2222 retained so existing
+# deploy.py inventory and fail2ban rules keep working without churn.
+Port 22
 Port 2222
 AddressFamily inet
 ListenAddress 0.0.0.0

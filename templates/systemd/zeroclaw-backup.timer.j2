@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily ZeroClaw agent-state backup
+
+[Timer]
+# Daily at 03:00 UTC. Persistent=true catches a missed run (e.g. host was down).
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

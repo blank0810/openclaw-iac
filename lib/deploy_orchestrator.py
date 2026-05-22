@@ -161,3 +161,59 @@ systemd.service(
     restarted=True,
     _sudo=True,
 )
+
+# --- Backup: host-side state-dir zips on a systemd timer (the cron-equivalent;
+# NOT part of the FastAPI flow). See docs/plans/2026-05-22-backup-restore-design.md.
+# Backups hold config.toml (Slack/Composio secrets) -> root-owned, mode 700.
+files.directory(
+    name="Ensure /opt/zeroclaw/backups (root 700; zips hold secrets)",
+    path="/opt/zeroclaw/backups",
+    present=True,
+    user="root",
+    group="root",
+    mode="700",
+    _sudo=True,
+)
+
+files.put(
+    name="Upload zeroclaw-backup.py to the host",
+    src="infra/files/zeroclaw-backup.py",
+    dest="/opt/zeroclaw/zeroclaw-backup.py",
+    user="root",
+    group="root",
+    mode="755",
+    _sudo=True,
+)
+
+files.template(
+    name="Render zeroclaw-backup systemd service",
+    src="templates/systemd/zeroclaw-backup.service.j2",
+    dest="/etc/systemd/system/zeroclaw-backup.service",
+    user="root",
+    group="root",
+    mode="644",
+    _sudo=True,
+)
+
+files.template(
+    name="Render zeroclaw-backup systemd timer",
+    src="templates/systemd/zeroclaw-backup.timer.j2",
+    dest="/etc/systemd/system/zeroclaw-backup.timer",
+    user="root",
+    group="root",
+    mode="644",
+    _sudo=True,
+)
+
+systemd.daemon_reload(
+    name="Reload systemd to pick up the backup units",
+    _sudo=True,
+)
+
+systemd.service(
+    name="Enable + start zeroclaw-backup.timer",
+    service="zeroclaw-backup.timer",
+    running=True,
+    enabled=True,
+    _sudo=True,
+)
