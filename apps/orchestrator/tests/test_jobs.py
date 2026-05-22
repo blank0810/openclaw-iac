@@ -51,12 +51,10 @@ def test_succeed_sets_result():
     store.start_step(job.job_id, "create")
     store.finish_step(job.job_id, "create", ok=True)
     result = AgentResult(
-        name="acme",
-        container_name="zeroclaw-acme",
-        server_ip="1.2.3.4",
-        host="1.2.3.4",
-        gateway_port=42617,
-        status="running",
+        user_id="u_1", name="acme", display_name="Acme",
+        container_name="zeroclaw-acme", container_id="cid1",
+        image="img:latest", server_ip="1.2.3.4", host="1.2.3.4",
+        gateway_port=42617, status="running",
     )
     store.succeed(job.job_id, result)
     fetched = store.get(job.job_id)
@@ -146,12 +144,10 @@ def test_slug_freed_after_success():
     store.succeed(
         job.job_id,
         AgentResult(
-            name="acme",
-            container_name="zeroclaw-acme",
-            server_ip="1.2.3.4",
-            host="1.2.3.4",
-            gateway_port=42617,
-            status="running",
+            user_id="u_1", name="acme", display_name="Acme",
+            container_name="zeroclaw-acme", container_id="cid1",
+            image="img:latest", server_ip="1.2.3.4", host="1.2.3.4",
+            gateway_port=42617, status="running",
         ),
     )
     assert store.active_job_for("acme") is None  # succeeded = no longer active

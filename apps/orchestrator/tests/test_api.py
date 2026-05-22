@@ -58,8 +58,15 @@ def _wire_app(tmp_path, monkeypatch, *, container_exists=False):
         store.start_step(job_id, "render_config")
         store.finish_step(job_id, "render_config", ok=True)
         store.succeed(job_id, AgentResult(
-            name=agent.name, container_name=f"zeroclaw-{agent.name}",
-            server_ip=server_ip, host=server_ip, gateway_port=42617,
+            user_id=agent.user_id,
+            name=agent.name,
+            display_name=agent.display_name,
+            container_name=f"zeroclaw-{agent.name}",
+            container_id="fakecid123",
+            image=image,
+            server_ip=server_ip,
+            host=server_ip,
+            gateway_port=42617,
             status="running",
         ))
 
@@ -86,7 +93,7 @@ def test_post_agents_provisions_via_injected_client(tmp_path, monkeypatch):
     app = _wire_app(tmp_path, monkeypatch)
     client = TestClient(app)
 
-    resp = client.post("/agents", json={"name": "acme"})
+    resp = client.post("/agents", json={"name": "acme", "user_id": "u_test"})
     assert resp.status_code == 202
     job_id = resp.json()["job_id"]
     assert job_id
@@ -106,7 +113,7 @@ def test_post_duplicate_slug_returns_409(tmp_path, monkeypatch):
     app.state.store.create(slug="acme")
     client = TestClient(app)
 
-    resp = client.post("/agents", json={"name": "acme"})
+    resp = client.post("/agents", json={"name": "acme", "user_id": "u_test"})
     assert resp.status_code == 409
     assert "acme" in resp.json()["detail"]
 
@@ -115,7 +122,7 @@ def test_post_existing_container_returns_409(tmp_path, monkeypatch):
     app = _wire_app(tmp_path, monkeypatch, container_exists=True)
     client = TestClient(app)
 
-    resp = client.post("/agents", json={"name": "acme"})
+    resp = client.post("/agents", json={"name": "acme", "user_id": "u_test"})
     assert resp.status_code == 409
     assert "already exists" in resp.json()["detail"]
     # guard fires before any disk write or job creation
@@ -156,6 +163,7 @@ def test_build_agent_definition_serializes_request(tmp_path):
     _write_defaults(tmp_path)
     req = CreateAgentRequest(
         name="acme",
+        user_id="u_42",
         display_name="Acme Bot",
         slack={"bot_token": "xoxb-1", "app_token": "xapp-1", "channel_id": "C1"},
         composio={"mcp_api_key": "ck_1"},
@@ -164,6 +172,7 @@ def test_build_agent_definition_serializes_request(tmp_path):
     agent = build_agent_definition(req, project_root=tmp_path)
 
     assert agent.name == "acme"
+    assert agent.user_id == "u_42"
     assert agent.display_name == "Acme Bot"
     assert agent.llm.provider == "litellm"
     assert agent.llm.model == "gpt-4o"
@@ -183,7 +192,7 @@ def test_build_agent_definition_request_only_inherits_defaults(tmp_path):
     """A bare request (no llm/slack/composio) must merge defaults cleanly."""
     _write_env(tmp_path)
     _write_defaults(tmp_path)
-    req = CreateAgentRequest(name="globex")
+    req = CreateAgentRequest(name="globex", user_id="u_1")
     agent = build_agent_definition(req, project_root=tmp_path)
 
     assert agent.name == "globex"
@@ -203,6 +212,7 @@ def test_build_agent_definition_carries_fields_through_to_env(tmp_path):
     _write_defaults(tmp_path)
     req = CreateAgentRequest(
         name="acme",
+        user_id="u_1",
         slack={"bot_token": "xoxb-1", "app_token": "xapp-1"},
         llm={"provider": "litellm", "model": "gpt-4o"},
     )

@@ -134,6 +134,7 @@ def _make_agent(**overrides):
     defaults = dict(
         name="acme",
         display_name="Acme",
+        user_id="u_test",
         enabled=True,
         state_dir="acme",
         image=None,
@@ -210,12 +211,14 @@ def _write_agent(tmp_path: Path, slug: str, **overrides) -> Path:
     enabled = body_overrides.pop("enabled", True)
     state_dir = body_overrides.pop("state_dir", slug)
     host_port = body_overrides.pop("host_port", 0)
+    user_id = body_overrides.pop("user_id", None)
+    user_id_line = f'\nuser_id = "{user_id}"' if user_id is not None else ""
     body = f"""
 [identity]
 name = "{slug}"
 display_name = "{slug.title()}"
 enabled = {str(enabled).lower()}
-state_dir = "{state_dir}"
+state_dir = "{state_dir}"{user_id_line}
 
 [runtime]
 host_port = {host_port}
@@ -262,6 +265,20 @@ def test_load_config_reads_one_agent(tmp_path, isolated_env):
     cfg = load_config(project_root=tmp_path)
     assert len(cfg.agents) == 1
     assert cfg.agents[0].name == "acme"
+
+
+def test_agent_definition_parses_user_id(tmp_path, isolated_env):
+    _write_env(tmp_path)
+    _write_agent(tmp_path, "acme", user_id="u_42")
+    cfg = load_config(project_root=tmp_path)
+    assert cfg.agents[0].user_id == "u_42"
+
+
+def test_agent_definition_user_id_defaults_empty(tmp_path, isolated_env):
+    _write_env(tmp_path)
+    _write_agent(tmp_path, "acme")  # no user_id in the toml
+    cfg = load_config(project_root=tmp_path)
+    assert cfg.agents[0].user_id == ""
 
 
 def test_load_config_skips_underscore_prefixed_dirs(tmp_path, isolated_env):

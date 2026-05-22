@@ -22,6 +22,7 @@ def chown_calls(monkeypatch):
 
 
 class _FakeContainer:
+    id = "fakecid123"
     status = "running"
 
 
@@ -184,3 +185,23 @@ def test_provision_skips_existing_network(tmp_path, chown_calls):
         server_ip="1.2.3.4",
     )
     assert client.networks.created == []  # not re-created
+
+
+def test_provision_result_includes_ownership_and_docker_info(tmp_path, chown_calls):
+    _write_env(tmp_path)
+    _write_agent(tmp_path, "acme", user_id="u_42")
+    agent = load_config(tmp_path).agents[0]
+    store = JobStore()
+    job = store.create()
+    provision_agent(
+        _FakeClient(), store, job.job_id, agent,
+        image="img:1",
+        states_base=tmp_path / "states",
+        project_root=tmp_path,
+        server_ip="1.2.3.4",
+    )
+    result = store.get(job.job_id).result
+    assert result.user_id == "u_42"
+    assert result.display_name == "Acme"
+    assert result.container_id == "fakecid123"
+    assert result.image == "img:1"

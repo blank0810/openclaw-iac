@@ -87,6 +87,7 @@ class PolicyConfig:
 class AgentDefinition:
     name: str
     display_name: str
+    user_id: str
     enabled: bool
     state_dir: str
     image: str | None
@@ -170,6 +171,7 @@ def _parse_agent_toml(path: Path, defaults: dict | None = None) -> AgentDefiniti
     return AgentDefinition(
         name=name,
         display_name=identity.get("display_name", name),
+        user_id=identity.get("user_id", ""),
         enabled=bool(identity.get("enabled", True)),
         state_dir=identity.get("state_dir", name),
         image=image,

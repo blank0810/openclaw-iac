@@ -132,8 +132,12 @@ def provision_agent(
         store.succeed(
             job_id,
             AgentResult(
+                user_id=agent.user_id,
                 name=agent.name,
+                display_name=agent.display_name,
                 container_name=f"zeroclaw-{agent.name}",
+                container_id=container.id,
+                image=image,
                 server_ip=server_ip,
                 host=server_ip,
                 gateway_port=GATEWAY_PORT,

@@ -55,6 +55,7 @@ def _agent(**overrides):
     defaults = dict(
         name="acme",
         display_name="Acme",
+        user_id="u_test",
         enabled=True,
         state_dir="acme",
         image=None,

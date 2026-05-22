@@ -56,6 +56,7 @@ def _render_agent_toml(req: CreateAgentRequest) -> str:
         "[identity]",
         f"name = {_toml_str(req.name)}",
         f"display_name = {_toml_str(display_name)}",
+        f"user_id = {_toml_str(req.user_id)}",
         "enabled = true",
         f"state_dir = {_toml_str(req.name)}",
         "",

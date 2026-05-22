@@ -10,7 +10,7 @@ from apps.orchestrator.models import (
 
 
 def test_valid_request_minimal():
-    req = CreateAgentRequest(name="acme-bot")
+    req = CreateAgentRequest(name="acme-bot", user_id="u_1")
     assert req.name == "acme-bot"
     assert req.display_name is None
 
@@ -18,6 +18,7 @@ def test_valid_request_minimal():
 def test_valid_request_full():
     req = CreateAgentRequest(
         name="acme-bot",
+        user_id="u_1",
         display_name="Acme",
         slack={"bot_token": "xoxb-x", "app_token": "xapp-x"},
         composio={"mcp_api_key": "ck_x"},
@@ -45,7 +46,9 @@ def test_slack_requires_both_tokens():
 
 def test_agent_result_shape():
     r = AgentResult(
-        name="acme", container_name="zeroclaw-acme",
+        user_id="u_1", name="acme", display_name="Acme",
+        container_name="zeroclaw-acme", container_id="abc123",
+        image="ghcr.io/zeroclaw-labs/zeroclaw:v0.7.3-debian",
         server_ip="1.2.3.4", host="1.2.3.4",
         gateway_port=42617, status="running",
     )
@@ -63,3 +66,37 @@ def test_job_state_defaults():
 def test_step_state():
     s = StepState(name="create")
     assert s.status == "queued"
+
+
+def test_create_agent_request_requires_user_id():
+    with pytest.raises(ValidationError):
+        CreateAgentRequest(name="acme-bot")
+
+
+def test_create_agent_request_rejects_blank_user_id():
+    with pytest.raises(ValidationError):
+        CreateAgentRequest(name="acme-bot", user_id="")
+
+
+def test_create_agent_request_rejects_control_char_user_id():
+    with pytest.raises(ValidationError):
+        CreateAgentRequest(name="acme-bot", user_id="u\x01bad")
+
+
+def test_agent_result_includes_ownership_and_docker_info():
+    r = AgentResult(
+        user_id="u_1",
+        name="acme",
+        display_name="Acme",
+        container_name="zeroclaw-acme",
+        container_id="abc123def456",
+        image="ghcr.io/zeroclaw-labs/zeroclaw:v0.7.3-debian",
+        server_ip="1.2.3.4",
+        host="1.2.3.4",
+        gateway_port=42617,
+        status="running",
+    )
+    assert r.user_id == "u_1"
+    assert r.display_name == "Acme"
+    assert r.container_id == "abc123def456"
+    assert r.image == "ghcr.io/zeroclaw-labs/zeroclaw:v0.7.3-debian"

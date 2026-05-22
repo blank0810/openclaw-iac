@@ -44,6 +44,7 @@ class LlmSpec(BaseModel):
 
 class CreateAgentRequest(BaseModel):
     name: str
+    user_id: str
     display_name: str | None = None
     slack: SlackSpec | None = None
     composio: ComposioSpec | None = None
@@ -59,6 +60,13 @@ class CreateAgentRequest(BaseModel):
             )
         return v
 
+    @field_validator("user_id")
+    @classmethod
+    def _valid_user_id(cls, v: str) -> str:
+        if not v:
+            raise ValueError("user_id must not be empty")
+        return _no_control_chars(v)
+
 
 JobStatus = Literal["queued", "running", "succeeded", "failed"]
 StepStatus = Literal["queued", "running", "succeeded", "failed"]
@@ -71,8 +79,12 @@ class StepState(BaseModel):
 
 
 class AgentResult(BaseModel):
+    user_id: str
     name: str
+    display_name: str
     container_name: str
+    container_id: str
+    image: str
     server_ip: str
     host: str
     gateway_port: int
