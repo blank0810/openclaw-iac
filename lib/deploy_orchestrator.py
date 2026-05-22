@@ -23,7 +23,7 @@ Verify (no live host needed):
 
 from __future__ import annotations
 
-from pyinfra.operations import files, server, systemd
+from pyinfra.operations import apt, files, server, systemd
 
 ORCH_DIR = "/opt/zeroclaw-orchestrator"
 VENV = f"{ORCH_DIR}/.venv"
@@ -55,9 +55,14 @@ for path in ("/opt/zeroclaw", "/opt/zeroclaw/states"):
         _sudo=True,
     )
 
-# Copy only the source the orchestrator needs. Each dir is synced individually;
+# Copy only the source the orchestrator needs. We sync apps/orchestrator
+# specifically, NOT all of apps/: apps/ also holds the multi-GB
+# apps/zeroclaw/upstream Rust clone (~1.1G, incl. target/ build artifacts) and
+# apps/slack-agent (~194M). Syncing apps/ wholesale transfers >1.3G over SFTP
+# file-by-file and effectively hangs. apps/ is a namespace package (no
+# __init__.py), so apps.orchestrator imports fine from the synced subdir alone.
 # __pycache__ is excluded so stale local bytecode never lands on the host.
-for subdir in ("apps", "lib", "templates"):
+for subdir in ("lib", "templates", "apps/orchestrator"):
     files.sync(
         name=f"Sync {subdir}/ to {ORCH_DIR}",
         src=subdir,
@@ -102,12 +107,23 @@ files.directory(
     _sudo=True,
 )
 
-# Create the venv once (idempotent: skip if the interpreter already exists),
-# then install/refresh deps. pip install is idempotent on its own.
+# venv creation needs python3-venv (ensurepip); without it `python3 -m venv`
+# produces a pip-less, broken venv. Ensure it before creating the venv.
+apt.packages(
+    name="Ensure python3-venv is installed",
+    packages=["python3-venv"],
+    present=True,
+    _sudo=True,
+)
+
+# Create the venv once. Guard on PIP (not just the python symlink): a prior
+# run without python3-venv leaves a partial venv whose bin/python exists but
+# bin/pip does not. Recreate from scratch when pip is missing so we never get
+# stuck with a half-built venv.
 server.shell(
     name="Create orchestrator venv if missing",
     commands=[
-        f"test -x {VENV}/bin/python || python3 -m venv {VENV}",
+        f"test -x {VENV}/bin/pip || (rm -rf {VENV} && python3 -m venv {VENV})",
     ],
     _sudo=True,
 )
